@@ -145,7 +145,6 @@ jobs:
           path: reports/screenshots/
           if-no-files-found: ignore
           retention-days: 7
-          if-no-files-found: ignore
 
       - name: Stop Odoo
         if: always()

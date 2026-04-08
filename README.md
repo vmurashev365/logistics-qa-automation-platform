@@ -116,6 +116,8 @@ and even write tests without programming knowledge!
 
 Goal: run a quick smoke suite and open an Allure report.
 
+The local demo runs in headed mode by default so the browser flow is visible.
+
 ```bash
 npm install
 npx playwright install chromium
@@ -212,6 +214,7 @@ You'll see test progress and results:
 
 - ✅ **Passed** — test completed successfully
 - ❌ **Failed** — test found an issue
+- Each scenario name and every Gherkin step are printed to the terminal with execution time.
 
 ---
 
@@ -281,20 +284,38 @@ npx cucumber-js --tags "@critical"
 npx cucumber-js --tags "@tablet"
 ```
 
-### Running with Visible Browser (for debugging)
+### Running Headless (optional)
 
-By default, tests run in background mode (headless). To see what's happening:
+By default, local demo runs open a visible browser. To switch back to headless mode:
 
 **Windows (PowerShell):**
 
 ```powershell
-$env:HEADLESS="false"; npm run test:smoke
+$env:HEADLESS="true"; npm run test:smoke
 ```
 
 **Mac/Linux:**
 
 ```bash
-HEADLESS=false npm run test:smoke
+HEADLESS=true npm run test:smoke
+```
+
+### Terminal Step Logging
+
+By default, local demo runs print each scenario name and every Gherkin step with execution time.
+
+To disable step timing logs:
+
+**Windows (PowerShell):**
+
+```powershell
+$env:DEBUG_TIMING="false"; npm run test:smoke
+```
+
+**Mac/Linux:**
+
+```bash
+DEBUG_TIMING=false npm run test:smoke
 ```
 
 ---
@@ -349,6 +370,7 @@ Artifacts uploaded per run:
 > **Manual trigger:** Open Actions → *CI — Smoke Tests & Reports* → *Run workflow* (works from GitHub mobile app too).
 
 ---
+
 ## 🖼️ Visual regression (POC)
 
 This is a minimal visual regression proof-of-concept using Cucumber tag `@visual`.
@@ -810,7 +832,7 @@ docker-compose down -v
 | `ODOO_USERNAME`         | `admin`                 | Odoo username for UI/API                     |
 | `ODOO_PASSWORD`         | `admin`                 | Odoo password for UI/API                     |
 | `ODOO_DATABASE`         | `logistics_qa_db`       | Odoo database name                           |
-| `HEADLESS`              | `true`                  | Run browser headless                         |
+| `HEADLESS`              | `false`                 | Run browser headless                         |
 | `BROWSER`               | `chromium`              | Browser type                                 |
 | `TIMEOUT`               | `30000`                 | Default timeout (ms)                         |
 | `SLOW_MO`               | `0`                     | Slow down actions (ms)                       |
@@ -852,7 +874,7 @@ These environment variables are required by the integration modules added under 
 | `ELD_API_TOKEN` | HOS / ELD | Required when `ELD_MODE=api` |
 | `HOS_RULESET` | HOS / ELD | Currently `FMCSA` only |
 
-### Running in Headed Mode (Debug)
+### Running in Headed Mode (Default)
 
 ```bash
 HEADLESS=false npm run test:smoke

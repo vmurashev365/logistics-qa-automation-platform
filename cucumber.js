@@ -41,7 +41,7 @@ module.exports = {
     // World parameters
     worldParameters: {
       baseUrl: process.env.BASE_URL || 'http://localhost:8069',
-      headless: process.env.HEADLESS !== 'false',
+      headless: process.env.HEADLESS === 'true',
       slowMo: parseInt(process.env.SLOW_MO || '0', 10),
       timeout: parseInt(process.env.TIMEOUT || '30000', 10)
     },

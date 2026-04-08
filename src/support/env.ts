@@ -81,7 +81,7 @@ export function getEnvConfig(): EnvironmentConfig {
     odooDatabase: process.env.ODOO_DATABASE || 'logistics_qa_db',
 
     // Browser Configuration
-    headless: parseBoolean(process.env.HEADLESS, true),
+    headless: parseBoolean(process.env.HEADLESS, false),
     browser: (process.env.BROWSER as EnvironmentConfig['browser']) || 'chromium',
     slowMo: parseInt(process.env.SLOW_MO, 0),
     timeout: parseInt(process.env.TIMEOUT, 30000),

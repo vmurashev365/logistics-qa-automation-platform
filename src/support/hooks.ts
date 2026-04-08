@@ -21,7 +21,19 @@ let browser: Browser;
 
 // Step timing diagnostics
 let stepStartTime: number;
-const DEBUG_TIMING = process.env.DEBUG_TIMING === 'true';
+let currentStepText = '';
+let currentStepIndex = 0;
+let scenarioStartTime = 0;
+const DEBUG_TIMING = process.env.DEBUG_TIMING !== 'false';
+const SLOW_STEP_THRESHOLD_MS = parseInt(process.env.SLOW_STEP_THRESHOLD_MS || '1500', 10);
+
+function formatDuration(durationMs: number): string {
+  if (durationMs < 1000) {
+    return `${durationMs}ms`;
+  }
+
+  return `${(durationMs / 1000).toFixed(2)}s`;
+}
 
 /**
  * BeforeAll Hook
@@ -198,6 +210,9 @@ Before({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
 
   // Clear test data from previous scenario
   this.clearTestData();
+  scenarioStartTime = Date.now();
+  currentStepIndex = 0;
+  currentStepText = '';
 
   console.log(`\n📋 Starting: ${this.scenarioName}`);
 });
@@ -237,7 +252,8 @@ After(async function (this: CustomWorld, scenario) {
   // Log scenario result
   const status = scenario.result?.status;
   const statusEmoji = status === Status.PASSED ? '✅' : status === Status.FAILED ? '❌' : '⚠️';
-  console.log(`${statusEmoji} Finished: ${this.scenarioName} - ${status}`);
+  const scenarioDuration = Date.now() - scenarioStartTime;
+  console.log(`${statusEmoji} Finished: ${this.scenarioName} - ${status} (${formatDuration(scenarioDuration)})`);
 
   // Close page and context
   if (this.page) {
@@ -324,9 +340,12 @@ AfterAll(async function () {
  * BeforeStep Hook
  * Records step start time for diagnostics
  */
-BeforeStep(async function (_step) {
+BeforeStep(async function (step) {
   if (DEBUG_TIMING) {
     stepStartTime = Date.now();
+    currentStepIndex += 1;
+    currentStepText = step.pickleStep?.text || 'Unknown step';
+    console.log(`   ${currentStepIndex}. → ${currentStepText}`);
   }
 });
 
@@ -337,8 +356,17 @@ BeforeStep(async function (_step) {
 AfterStep(async function (step) {
   if (DEBUG_TIMING) {
     const duration = Date.now() - stepStartTime;
-    const stepText = step.pickleStep?.text || 'Unknown step';
-    const color = duration > 3000 ? '🔴' : duration > 1000 ? '🟡' : '🟢';
-    console.log(`   ${color} ${duration}ms - ${stepText}`);
+    const stepText = currentStepText || step.pickleStep?.text || 'Unknown step';
+    const status = step.result?.status || 'UNKNOWN';
+    const isSlowStep = duration >= SLOW_STEP_THRESHOLD_MS;
+    const statusIcon = status === Status.PASSED
+      ? '✅'
+      : status === Status.FAILED
+        ? '❌'
+        : status === Status.SKIPPED
+          ? '⏭️'
+          : '⚠️';
+    const slowLabel = isSlowStep ? ' SLOW' : '';
+    console.log(`   ${currentStepIndex}. ${statusIcon}${slowLabel} ${formatDuration(duration)} - ${stepText}`);
   }
 });

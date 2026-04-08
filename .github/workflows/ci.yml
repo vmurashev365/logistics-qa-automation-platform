@@ -1,0 +1,152 @@
+name: CI — Smoke Tests & Reports
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:          # manual trigger from GitHub UI / mobile app
+  schedule:
+    - cron: '30 3 * * *'     # nightly at 03:30 UTC
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: odoo
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U odoo -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start Odoo
+        run: |
+          docker run -d --name odoo \
+            --network host \
+            -e HOST=127.0.0.1 \
+            -e PORT=5432 \
+            -e USER=odoo \
+            -e PASSWORD=odoo \
+            -v ${{ github.workspace }}/odoo.conf:/etc/odoo/odoo.conf:ro \
+            odoo:17.0 \
+            odoo --database=logistics_qa_db --init=fleet --without-demo=False --load-language=en_US
+
+      - name: Wait for Odoo to be ready
+        run: |
+          echo "Waiting for Odoo (up to 120s)..."
+          for i in $(seq 1 24); do
+            if curl -sf http://localhost:8069/web/health > /dev/null 2>&1; then
+              echo "Odoo is ready."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Odoo failed to start in time."
+          docker logs odoo
+          exit 1
+
+      - name: Ensure report directories
+        run: mkdir -p reports/cucumber reports/screenshots allure-results
+
+      - name: Run smoke tests
+        run: npm run test:smoke
+        env:
+          BASE_URL: http://localhost:8069
+          ODOO_USERNAME: admin
+          ODOO_PASSWORD: admin
+          ODOO_DATABASE: logistics_qa_db
+          HEADLESS: 'true'
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: 5432
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: odoo
+          POSTGRES_DATABASE: logistics_qa_db
+
+      - name: Generate Cucumber HTML report
+        if: always()
+        run: npm run report:cucumber || true
+
+      - name: Generate Allure report
+        if: always()
+        run: npm run report:allure:trend || true
+
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results
+          path: allure-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload Allure report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload Allure history
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-history
+          path: allure-history/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload Cucumber report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cucumber-report
+          path: reports/cucumber/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-screenshots
+          path: reports/screenshots/
+          if-no-files-found: ignore
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Stop Odoo
+        if: always()
+        run: docker stop odoo || true

@@ -1,5 +1,6 @@
 # Logistics QA Automation Platform
 
+[![CI — Smoke Tests](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20%2B-green.svg)](https://nodejs.org/)
 
@@ -32,7 +33,7 @@ workflow applications.
 - 📚 **50+ Reusable Steps** - Product Owners can write tests without coding
 - 🐳 **Docker-First** - Containerized Odoo environment for consistent testing
 - 📊 **Rich Reporting** - Cucumber HTML reports, Allure reports, screenshots on failure
-- 🚀 **CI/CD Ready** - GitHub Actions workflows with nightly regression
+- 🚀 **CI/CD Ready** - GitHub Actions workflow with nightly smoke regression
 
 ---
 
@@ -95,7 +96,7 @@ This is a portfolio / training project and is not associated with any specific c
 
 ## 🎯 What is this?
 
-This framework automatically validates a logistics workflow platform:
+This framework demonstrates automated validation patterns for a logistics workflow platform:
 
 - ✅ **Web Interface** — clicks, form filling, display verification
 - ✅ **API** — server response validation without using the UI
@@ -327,23 +328,27 @@ npm run report:allure:trend:open
 
 ## 🤖 CI (GitHub Actions)
 
-The workflow in `.github/workflows/ci.yml` runs:
+The workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) provides:
 
-- `npm ci`
-- `npm run test:smoke`
-- `npm run report:allure:trend`
+| Feature | Details |
+| --- | --- |
+| **Triggers** | `push` to main, `pull_request`, nightly schedule (03:30 UTC), manual `workflow_dispatch` |
+| **Environment** | Ubuntu + PostgreSQL service + Odoo 17 container (Docker) |
+| **Test command** | `npm run test:smoke` |
+| **Reports** | Cucumber HTML + Allure (with trend history) |
+| **Rerun** | Re-run any job from GitHub Actions UI or GitHub mobile app |
 
 Artifacts uploaded per run:
 
-- `allure-results/` (raw results)
-- `allure-report/` (generated HTML)
-- `allure-history/` (trend history snapshot)
+- `allure-results/` — raw Allure data
+- `allure-report/` — generated Allure HTML report
+- `allure-history/` — trend history snapshot (30-day retention)
+- `cucumber-report/` — Cucumber HTML report
+- `failure-screenshots/` — captured on failure only
 
-Note on trends: Allure trends require a previous run’s `allure-history`.
-CI uploads it as an artifact so you can reuse it between runs (or wire a cache/pages flow later).
+> **Manual trigger:** Open Actions → *CI — Smoke Tests & Reports* → *Run workflow* (works from GitHub mobile app too).
 
 ---
-
 ## 🖼️ Visual regression (POC)
 
 This is a minimal visual regression proof-of-concept using Cucumber tag `@visual`.

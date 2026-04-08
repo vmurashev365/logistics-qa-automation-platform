@@ -1,0 +1,67 @@
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: logistics-qa-postgres
+    environment:
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U odoo -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - logistics-qa-network
+
+  odoo:
+    image: odoo:17.0
+    container_name: logistics-qa-odoo
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8069:8069"
+    environment:
+      HOST: postgres
+      PORT: 5432
+      USER: odoo
+      PASSWORD: odoo
+    volumes:
+      - odoo_data:/var/lib/odoo
+      - odoo_addons:/mnt/extra-addons
+      - ./odoo.conf:/etc/odoo/odoo.conf:ro
+    command: >
+      odoo
+      --database=logistics_qa_db
+      --init=fleet
+      --without-demo=False
+      --load-language=en_US
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8069/web/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - logistics-qa-network
+
+volumes:
+  postgres_data:
+    driver: local
+  odoo_data:
+    driver: local
+  odoo_addons:
+    driver: local
+
+networks:
+  logistics-qa-network:
+    driver: bridge

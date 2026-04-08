@@ -4,9 +4,9 @@
  * This repository's PRIMARY runner is Cucumber (`cucumber-js`) and the browser automation
  * is driven via `playwright` inside Cucumber hooks/steps.
  *
- * This file exists only for teams that want to experiment with the Playwright Test runner
- * (e.g., `npx playwright test`) and device projects. Note: there is no `tests/` folder in
- * the baseline; unless you add Playwright Test specs, this config is effectively unused.
+ * Run Playwright Test specs with: npx playwright test
+ * Specs live in the `tests/` directory (see tests/smoke.spec.ts).
+ * The primary test runner for BDD scenarios is still Cucumber (npm run test:smoke).
  *
  * @see https://playwright.dev/docs/test-configuration
  */

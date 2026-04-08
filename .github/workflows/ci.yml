@@ -58,7 +58,6 @@ jobs:
             -e PORT=5432 \
             -e USER=odoo \
             -e PASSWORD=odoo \
-            -v ${{ github.workspace }}/odoo.conf:/etc/odoo/odoo.conf:ro \
             odoo:17.0 \
             odoo --database=logistics_qa_db --db_host=127.0.0.1 --db_port=5432 --db_user=odoo --db_password=odoo --init=fleet --without-demo=False --load-language=en_US
 

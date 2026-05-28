@@ -1062,3 +1062,13 @@ Remember:
 - Use visible browser mode (`HEADLESS=false`) when debugging
 - Check the [STEP_LIBRARY.md](docs/STEP_LIBRARY.md) for all available test steps
 - When in doubt, check the [RUNBOOK.md](docs/RUNBOOK.md)
+
+## Usage Notice
+
+Copyright © Victor Murashev. All rights reserved.
+
+This repository is provided for portfolio review, technical evaluation, and interview demonstration purposes only.
+
+Commercial reuse, redistribution, client implementation, internal delivery, agency delivery, training use, or adaptation of this framework without prior written permission is not allowed.
+
+This project is an independent QA automation portfolio framework and is not affiliated with, endorsed by, or sponsored by Odoo S.A.

@@ -25,7 +25,18 @@ test.describe('Odoo – smoke', () => {
     await page.fill('input[name="login"]', process.env.ODOO_USERNAME ?? 'admin');
     await page.fill('input[name="password"]', process.env.ODOO_PASSWORD ?? 'admin');
     await page.click('button[type="submit"]');
-    // Odoo redirects to /odoo or /web after successful login
-    await expect(page).toHaveURL(/\/odoo|\/web/);
+    // A failed login stays on /web/login, which also matches /web: require the web client itself.
+    await expect(page.locator('.o_main_navbar')).toBeVisible();
+    await expect(page).not.toHaveURL(/\/web\/login/);
+  });
+
+  test('wrong password keeps the user on the login page', async ({ page }) => {
+    await page.goto('/web/login');
+    await page.fill('input[name="login"]', process.env.ODOO_USERNAME ?? 'admin');
+    await page.fill('input[name="password"]', 'definitely-not-the-password');
+    await page.click('button[type="submit"]');
+    await expect(page.locator('.alert-danger')).toHaveText('Wrong login/password');
+    await expect(page).toHaveURL(/\/web\/login/);
+    await expect(page.locator('.o_main_navbar')).toHaveCount(0);
   });
 });

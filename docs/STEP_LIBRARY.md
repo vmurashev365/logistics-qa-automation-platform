@@ -150,7 +150,7 @@ Test REST and Odoo JSON-RPC APIs.
 | `Given Odoo API is authenticated`            | `Given Odoo API is authenticated`              | Verifies API session is active |
 | `When I send {method} request to {endpoint}` | `When I send "GET" request to "/api/vehicles"` | Makes HTTP request             |
 | `When I create Odoo record in {model} with:` | See example below                              | Creates record via JSON-RPC    |
-| `Then API response status should be {code}`  | `Then API response status should be 200`       | Verifies HTTP status code      |
+| `Then API response status should be {code}`  | `Then API response status should be 200`       | Real HTTP status, not JSON-RPC |
 | `Then API response should contain {field}`   | `Then API response should contain "id"`        | Verifies response has field    |
 
 ---
@@ -241,11 +241,11 @@ Scenario: Cancel vehicle creation without saving
 @api @vehicle-api
 Scenario: Create vehicle using Odoo API
   Given Odoo API is authenticated
-  When I create Odoo record in "fleet.vehicle" with:
+  When I create vehicle via API with:
     | license_plate | MD-API-001 |
-    | model_id      | 1          |
-  Then API response status should be 200
-  And API response should contain "id"
+  Then the vehicle created via API should be stored in Odoo with:
+    | license_plate | MD-API-001 |
+    | active        | true       |
   And database should contain vehicle plate "MD-API-001"
 ```
 

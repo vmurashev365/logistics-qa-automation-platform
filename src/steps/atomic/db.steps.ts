@@ -228,18 +228,6 @@ Then(
   }
 );
 
-Then(
-  'audit log should record deletion timestamp',
-  async function (this: CustomWorld) {
-    // In a real implementation, this would check an audit log table
-    // For now, we just verify the step is recognized
-    console.log('⚠️ Audit log verification is a placeholder - implement audit table check');
-    
-    // Store that audit check was performed
-    this.setTestData('auditLogChecked', true);
-  }
-);
-
 // ============================================
 // TEST DATA CLEANUP
 // ============================================

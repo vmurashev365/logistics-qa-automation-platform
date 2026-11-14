@@ -118,7 +118,7 @@ Before({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
     
     // Cleanup test vehicles BEFORE scenario (ensure clean state)
     try {
-      const testPatterns = ['MD-INT-TEST-%', 'MD-E2E-%', 'MD-AUDIT-%', 'MD-TEST-%', 'MD-DRV-%', 'MD-CTI-%', 'MD-OFF-%', 'MD-API-%', 'MD-BATCH-%', 'MD-CONFLICT-%'];
+      const testPatterns = ['MD-INT-TEST-%', 'MD-E2E-%', 'MD-AUDIT-%', 'MD-TEST-%', 'MD-DRV-%', 'MD-CTI-%', 'MD-OFF-%', 'MD-API-%', 'MD-BATCH-%', 'MD-CONFLICT-%', 'MD-XSS-%', 'MD-SEARCH-%', 'MD-SYNC-%'];
       let totalDeleted = 0;
       
       for (const pattern of testPatterns) {
@@ -211,6 +211,7 @@ Before({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
   // Clear test data from previous scenario
   this.clearTestData();
   scenarioStartTime = Date.now();
+  this.setTestData('scenarioStartedAt', scenarioStartTime);
   currentStepIndex = 0;
   currentStepText = '';
 
@@ -287,29 +288,19 @@ After(async function (this: CustomWorld, scenario) {
   // Cleanup test vehicles created during this scenario
   const testVehicles = this.getTestData<string[]>('testVehicles') || [];
   if (testVehicles.length > 0 && this.fleetEndpoints && this.odooApi) {
-    try {
-      for (const plate of testVehicles) {
-        const vehicle = await this.fleetEndpoints.getVehicleByPlate(plate);
-        if (vehicle?.id) {
-          // First, delete driver assignment logs to avoid FK constraint
-          const assignmentLogs = await this.odooApi.search('fleet.vehicle.assignation.log', [['vehicle_id', '=', vehicle.id]]);
-          if (assignmentLogs.length > 0) {
-            await this.odooApi.unlink('fleet.vehicle.assignation.log', assignmentLogs);
+    for (const plate of testVehicles) {
+      try {
+        // Archived ones too, with the odometer and driver history that blocks unlink
+        const vehicles = await this.fleetEndpoints.findVehiclesByPlateIncludingArchived(plate);
+        for (const vehicle of vehicles) {
+          if (vehicle.id !== undefined) {
+            await this.fleetEndpoints.deleteVehicleAndHistory(vehicle.id);
+            console.log(`🗑️ Cleanup: deleted test vehicle ${plate}`);
           }
-          
-          // Delete odometer records
-          const odometerRecords = await this.odooApi.search('fleet.vehicle.odometer', [['vehicle_id', '=', vehicle.id]]);
-          if (odometerRecords.length > 0) {
-            await this.odooApi.unlink('fleet.vehicle.odometer', odometerRecords);
-          }
-          
-          // Now delete the vehicle
-          await this.fleetEndpoints.deleteVehicle(vehicle.id);
-          console.log(`🗑️ Cleanup: deleted test vehicle ${plate}`);
         }
+      } catch (error) {
+        console.log(`⚠️ Test vehicle cleanup failed for ${plate}: ${error}`);
       }
-    } catch (error) {
-      console.log(`⚠️ Test vehicle cleanup failed: ${error}`);
     }
   }
 });

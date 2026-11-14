@@ -9,11 +9,18 @@ Feature: Driver Assignment
     And I am logged in as admin
 
   @smoke
-  Scenario: Navigate to drivers page
+  Scenario: Open a vehicle from the vehicles list
+    Given vehicle "MD-DRV-010" exists in the system
     When I navigate to "vehicles" page
-    Then I should see "Vehicles" text
+    And I search for "MD-DRV-010" in search
+    And I click on vehicle "MD-DRV-010"
+    Then the vehicle form should show license plate "MD-DRV-010"
 
   @crud
-  Scenario: View vehicle details
+  Scenario: Assign a driver to a vehicle in the vehicle form
+    Given vehicle "MD-DRV-011" exists in the system
     When I navigate to "vehicles" page
-    Then I should see "Vehicles" text
+    And I search for "MD-DRV-011" in search
+    And I click on vehicle "MD-DRV-011"
+    And I assign driver "Ion Popescu" via UI
+    Then vehicle "MD-DRV-011" should have driver "Ion Popescu" in Odoo

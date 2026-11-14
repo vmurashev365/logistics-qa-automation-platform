@@ -11,13 +11,13 @@ Feature: Fleet Management Smoke Test
   @critical @smoke-001
   Scenario: Access Vehicles page
     When I navigate to "vehicles" page
-    Then I should see "Vehicles" text
+    Then the vehicles list should be shown
 
   @critical @smoke-002
   Scenario: Open vehicle creation form
     When I navigate to "vehicles" page
     And I click "create" button
-    Then I should see "License Plate" text
+    Then an empty vehicle form should be open
 
   @critical @smoke-003
   Scenario: Fill vehicle license plate field
@@ -31,4 +31,4 @@ Feature: Fleet Management Smoke Test
     When I navigate to "vehicles" page
     And I click "create" button
     And I click "discard" button
-    Then I should see "New Request" text
+    Then the vehicles list should be shown

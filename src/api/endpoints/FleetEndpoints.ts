@@ -155,6 +155,44 @@ export class FleetEndpoints {
    * Search vehicles by partial license plate match
    * @param platePattern - Partial license plate (uses ilike)
    */
+  /**
+   * All vehicles whose plate equals `plate`, archived ones included.
+   * Use this to prove a record does or does not exist: the default search hides archived records.
+   */
+  async findVehiclesByPlateIncludingArchived(plate: string): Promise<Vehicle[]> {
+    return this.client.searchRead<Vehicle>(
+      VEHICLE_MODEL,
+      [['license_plate', '=', plate]],
+      DEFAULT_VEHICLE_FIELDS,
+      { context: { active_test: false } }
+    );
+  }
+
+  /**
+   * All vehicles whose plate starts with `prefix`, archived ones included.
+   */
+  async findVehiclesByPlatePrefixIncludingArchived(prefix: string): Promise<Vehicle[]> {
+    return this.client.searchRead<Vehicle>(
+      VEHICLE_MODEL,
+      [['license_plate', '=like', `${prefix}%`]],
+      DEFAULT_VEHICLE_FIELDS,
+      { context: { active_test: false } }
+    );
+  }
+
+  /**
+   * Delete a vehicle together with the odometer readings and driver history that block unlink.
+   */
+  async deleteVehicleAndHistory(id: number): Promise<void> {
+    for (const dependent of ['fleet.vehicle.assignation.log', 'fleet.vehicle.odometer']) {
+      const ids = await this.client.search(dependent, [['vehicle_id', '=', id]]);
+      if (ids.length > 0) {
+        await this.client.unlink(dependent, ids);
+      }
+    }
+    await this.client.unlink(VEHICLE_MODEL, [id]);
+  }
+
   async searchVehiclesByPlate(platePattern: string): Promise<Vehicle[]> {
     return this.client.searchRead<Vehicle>(
       VEHICLE_MODEL,

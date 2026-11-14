@@ -177,7 +177,7 @@ export class OdooJsonRpcClient {
     model: string,
     domain: OdooDomain = [],
     fields: string[] = [],
-    options?: { limit?: number; offset?: number; order?: string }
+    options?: { limit?: number; offset?: number; order?: string; context?: Record<string, unknown> }
   ): Promise<T[]> {
     this.ensureAuthenticated();
 
@@ -187,7 +187,22 @@ export class OdooJsonRpcClient {
       limit: options?.limit,
       offset: options?.offset,
       order: options?.order,
+      ...(options?.context ? { context: { ...this.context, ...options.context } } : {}),
     });
+  }
+
+  /**
+   * Call any public model method, e.g. `export_data`, with the session's user context.
+   */
+  async call<T = unknown>(
+    model: string,
+    method: string,
+    args: unknown[],
+    kwargs: Record<string, unknown> = {}
+  ): Promise<T> {
+    this.ensureAuthenticated();
+
+    return this.callModel<T>(model, method, args, kwargs);
   }
 
   /**

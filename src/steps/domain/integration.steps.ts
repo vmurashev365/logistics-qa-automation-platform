@@ -9,6 +9,7 @@ import { expect } from '@playwright/test';
 import { CustomWorld } from '../../support/custom-world';
 import { UI_MAP } from '../../ui-map';
 import { Vehicle } from '../../types/api';
+import { verify, Check } from '../../support/evidence';
 
 // =============================================================================
 // Message Verification Steps (UI-MAP pattern)
@@ -115,10 +116,10 @@ When('I send authenticated request to search vehicles with plate {string}', { ti
 
   // Search for vehicle
   const vehicle = await this.fleetEndpoints.getVehicleByPlate(plate);
-  
+
   this.lastApiResponse = {
-    status: vehicle ? 200 : 404,
-    headers: {},
+    kind: 'rpc',
+    call: `fleet.vehicle.search_read license_plate = ${plate}`,
     body: vehicle ? [vehicle] : [],
   };
 
@@ -144,10 +145,10 @@ When('I send authenticated request to get vehicle {string}', { timeout: 30000 },
   }
 
   const vehicle = await this.fleetEndpoints.getVehicleByPlate(plate);
-  
+
   this.lastApiResponse = {
-    status: vehicle ? 200 : 404,
-    headers: {},
+    kind: 'rpc',
+    call: `fleet.vehicle.search_read license_plate = ${plate}`,
     body: vehicle,
   };
 
@@ -161,9 +162,12 @@ When('I send authenticated request to get vehicle {string}', { timeout: 30000 },
  * Verifies odometer value in API response
  */
 Then('API response should show odometer {int}', async function (this: CustomWorld, expectedOdometer: number) {
-  const vehicle = this.lastApiResponse?.body as Vehicle | undefined;
-  expect(vehicle).toBeDefined();
-  expect(vehicle?.odometer || 0).toBe(expectedOdometer);
+  const vehicle = (this.lastApiResponse?.body ?? null) as Vehicle | null;
+
+  verify(this, `The API shows odometer ${expectedOdometer}`, [
+    { what: 'vehicle returned', source: 'Odoo JSON-RPC', expected: true, actual: vehicle !== null },
+    { what: 'odometer', source: 'Odoo JSON-RPC', expected: expectedOdometer, actual: vehicle?.odometer ?? null },
+  ]);
 });
 
 /**
@@ -171,11 +175,13 @@ Then('API response should show odometer {int}', async function (this: CustomWorl
  * Verifies driver in API response
  */
 Then('API response should show driver {string}', async function (this: CustomWorld, driverName: string) {
-  const vehicle = this.lastApiResponse?.body as Vehicle | undefined;
-  expect(vehicle).toBeDefined();
-  const driverIdArray = vehicle?.driver_id as [number, string] | undefined;
-  const actualDriver = driverIdArray?.[1] || '';
-  expect(actualDriver).toContain(driverName);
+  const vehicle = (this.lastApiResponse?.body ?? null) as Vehicle | null;
+  const driver = Array.isArray(vehicle?.driver_id) ? vehicle.driver_id[1] : null;
+
+  verify(this, `The API shows driver "${driverName}"`, [
+    { what: 'vehicle returned', source: 'Odoo JSON-RPC', expected: true, actual: vehicle !== null },
+    { what: 'driver', source: 'Odoo JSON-RPC', expected: driverName, actual: driver },
+  ]);
 });
 
 /**
@@ -489,18 +495,22 @@ Then('database vehicle {string} should match API response', { timeout: 10000 }, 
   plate: string
 ) {
   if (!this.dbClient) {
-    console.log('Database client not configured, skipping DB verification');
-    return;
+    throw new Error('Database client not initialized. Ensure DB_ENABLED=true in environment.');
   }
 
   const dbVehicle = await this.dbClient.getVehicleByPlate(plate);
-  const apiVehicle = this.getTestData<Record<string, unknown>>('storedVehicleData');
-  
-  expect(dbVehicle).toBeDefined();
-  expect(apiVehicle).toBeDefined();
-  
-  // Compare key fields
-  expect(dbVehicle?.license_plate).toBe(apiVehicle?.license_plate);
+  const apiVehicle = (this.getTestData<Vehicle | null>('storedVehicleData') ?? null) as Vehicle | null;
+  const m2oId = (value: unknown): number | null => (Array.isArray(value) ? value[0] : null);
+
+  verify(this, `PostgreSQL holds vehicle "${plate}" as the API returned it`, [
+    { what: 'vehicle returned by the API', source: 'Odoo JSON-RPC', expected: true, actual: apiVehicle !== null },
+    { what: 'vehicle row in fleet_vehicle', source: 'PostgreSQL', expected: true, actual: dbVehicle !== null },
+    { what: 'id', source: 'PostgreSQL vs API', expected: apiVehicle?.id ?? null, actual: dbVehicle?.id ?? null },
+    { what: 'license_plate', source: 'PostgreSQL vs API', expected: apiVehicle?.license_plate ?? null, actual: dbVehicle?.license_plate ?? null },
+    { what: 'model_id', source: 'PostgreSQL vs API', expected: m2oId(apiVehicle?.model_id), actual: dbVehicle?.model_id ?? null },
+    { what: 'driver_id', source: 'PostgreSQL vs API', expected: m2oId(apiVehicle?.driver_id), actual: dbVehicle?.driver_id ?? null },
+    { what: 'active', source: 'PostgreSQL vs API', expected: apiVehicle?.active ?? null, actual: dbVehicle?.active ?? null },
+  ]);
 });
 
 // =============================================================================
@@ -588,16 +598,9 @@ When('I create vehicle via API with plate {string}', { timeout: 30000 }, async f
     odometer: 0,
   });
   
-  this.lastApiResponse = {
-    status: vehicleId ? 200 : 400,
-    headers: {},
-    body: { id: vehicleId, license_plate: plate },
-  };
-  
-  // Store for cleanup
-  const testVehicles = this.getTestData<string[]>('testVehicles') || [];
-  testVehicles.push(plate);
-  this.setTestData('testVehicles', testVehicles);
+  this.lastApiResponse = { kind: 'rpc', call: 'fleet.vehicle.create', body: { id: vehicleId, license_plate: plate } };
+  this.setTestData('lastCreatedVehicleId', vehicleId);
+  this.trackVehicle(plate);
 });
 
 /**
@@ -616,12 +619,8 @@ When('I update vehicle {string} odometer to {int} via API', { timeout: 30000 }, 
   }
   
   const success = await this.fleetEndpoints.updateVehicle(vehicle.id, { odometer });
-  
-  this.lastApiResponse = {
-    status: success ? 200 : 400,
-    headers: {},
-    body: { success, odometer },
-  };
+
+  this.lastApiResponse = { kind: 'rpc', call: `fleet.vehicle.write ${vehicle.id}`, body: { success, odometer } };
 });
 
 /**
@@ -649,13 +648,23 @@ Then('I should see odometer value {string}', { timeout: 10000 }, async function 
  * Verifies test cleanup was successful
  */
 Then('test environment should be clean', async function (this: CustomWorld) {
-  // Verify test vehicles were cleaned up
-  const testVehicles = this.getTestData<string[]>('testVehicles') || [];
-  
-  for (const plate of testVehicles) {
-    const vehicle = await this.fleetEndpoints.getVehicleByPlate(plate);
-    expect(vehicle).toBeFalsy();
+  // The prefixes come from the "I cleanup test vehicles with prefix" steps of this scenario.
+  const prefixes = this.getTestData<string[]>('cleanedPrefixes') || [];
+  if (prefixes.length === 0) {
+    throw new Error('No cleanup step ran in this scenario, so there is nothing to check');
   }
+
+  const checks: Check[] = [];
+  for (const prefix of prefixes) {
+    const left = await this.fleetEndpoints.findVehiclesByPlatePrefixIncludingArchived(prefix);
+    checks.push({
+      what: `vehicles with plate ${prefix}*, archived included`,
+      source: 'Odoo JSON-RPC',
+      expected: [],
+      actual: left.map((vehicle) => vehicle.license_plate),
+    });
+  }
+  verify(this, 'No test vehicles are left', checks);
 });
 
 /**

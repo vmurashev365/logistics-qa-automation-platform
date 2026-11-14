@@ -11,7 +11,7 @@ import { LoginPage } from '../pages/web/LoginPage';
 import { OdooJsonRpcClient } from '../api/clients/OdooJsonRpcClient';
 import { RestApiClient } from '../api/clients/RestApiClient';
 import { FleetEndpoints } from '../api/endpoints/FleetEndpoints';
-import { HttpResponse } from '../types/api';
+import { ApiResult } from '../types/api';
 import { PgClient } from '../db/PgClient';
 import { AsteriskMockClient } from '../api/clients/AsteriskMockClient';
 import { CouchClient } from '../db/CouchClient';
@@ -56,8 +56,8 @@ export class CustomWorld extends World<WorldParameters> {
   restApi!: RestApiClient;
   fleetEndpoints!: FleetEndpoints;
 
-  // API Response Storage
-  lastApiResponse?: HttpResponse;
+  // What the last API step received: a real HTTP response or an Odoo JSON-RPC result
+  lastApiResponse?: ApiResult;
 
   // Database Client (PostgreSQL)
   dbClient?: PgClient;
@@ -127,6 +127,17 @@ export class CustomWorld extends World<WorldParameters> {
    */
   hasTestData(key: string): boolean {
     return this.testData.has(key);
+  }
+
+  /**
+   * Register a vehicle plate for deletion by the After hook.
+   */
+  trackVehicle(plate: string): void {
+    const plates = this.getTestData<string[]>('testVehicles') || [];
+    if (!plates.includes(plate)) {
+      plates.push(plate);
+    }
+    this.setTestData('testVehicles', plates);
   }
 
   /**

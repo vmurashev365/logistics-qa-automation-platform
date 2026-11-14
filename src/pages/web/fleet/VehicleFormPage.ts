@@ -4,6 +4,7 @@
  */
 
 import { Page } from 'playwright';
+import { expect } from '@playwright/test';
 import { OdooBasePage } from '../../base/OdooBasePage';
 import { UI_MAP, FieldKey, isValidFieldKey } from '../../../ui-map';
 
@@ -206,6 +207,35 @@ export class VehicleFormPage extends OdooBasePage {
     await this.page.locator(`${this.formSelectors.dropdownMenu}:has-text("${modelName}")`).first().click();
     
     await this.waitForLoadingComplete();
+  }
+
+  /**
+   * Choose a vehicle model from the Model field's autocomplete by its full name ("Brand/Model").
+   * Fails, listing what Odoo offered, if the model is not offered. Never creates a model.
+   */
+  async chooseModel(displayName: string): Promise<void> {
+    const modelName = displayName.includes('/')
+      ? displayName.slice(displayName.lastIndexOf('/') + 1)
+      : displayName;
+    const input = this.page.locator(`${this.formSelectors.modelSelect} input`);
+    await input.fill(modelName);
+
+    const items = this.page.locator(
+      `${this.formSelectors.autocompleteDropdown} .o-autocomplete--dropdown-item`
+    );
+    const escaped = displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const option = items.filter({ hasText: new RegExp(`^\\s*${escaped}\\s*$`) }).first();
+    try {
+      await option.waitFor({ state: 'visible', timeout: 5000 });
+    } catch {
+      const offered = (await items.allInnerTexts()).map((text) => text.trim());
+      throw new Error(
+        `Vehicle model "${displayName}" is not offered by Odoo for "${modelName}". ` +
+          `Offered: ${offered.length > 0 ? offered.join(', ') : 'nothing'}`
+      );
+    }
+    await option.click();
+    await expect(input).toHaveValue(displayName, { timeout: 5000 });
   }
 
   /**

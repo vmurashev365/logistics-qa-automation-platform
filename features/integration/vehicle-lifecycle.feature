@@ -23,8 +23,7 @@ Feature: Complete Vehicle Lifecycle
 
     # API Layer - Verify vehicle was synced to API
     When I send authenticated request to search vehicles with plate "MD-INT-TEST-001"
-    Then API response status should be 200
-    And API response should contain vehicle with plate "MD-INT-TEST-001"
+    Then API response should contain vehicle with plate "MD-INT-TEST-001"
 
     # Database Layer - Verify vehicle persisted to database
     Then database should contain vehicle plate "MD-INT-TEST-001"
@@ -63,7 +62,7 @@ Feature: Complete Vehicle Lifecycle
     # Verify NOT visible in UI after deletion
     When I navigate to "vehicles" page
     And I search for "MD-E2E-003" in search
-    Then I should not see "MD-E2E-003" in vehicle list
+    Then the vehicles search for "MD-E2E-003" should find no vehicles
 
     # Verify via API that vehicle is archived (not found in active records)
     When I send authenticated request to get vehicle "MD-E2E-003"
@@ -245,19 +244,19 @@ Feature: Complete Vehicle Lifecycle
   Scenario: API creation persists to database immediately
     # Create via API
     When I create vehicle via API with plate "MD-API-001"
-    Then API response status should be 200
 
     # Verify immediate persistence
     Then database should contain vehicle plate "MD-API-001"
 
   @api-db-consistency @integration-013
   Scenario: Database state matches API response
-    # Get vehicle via API
-    When I send authenticated request to get vehicle "MD-API-001"
+    # Get vehicle via API (this scenario creates its own vehicle)
+    Given vehicle "MD-API-013" exists in the system
+    When I send authenticated request to get vehicle "MD-API-013"
     And I store API response vehicle data
 
     # Compare with database
-    Then database vehicle "MD-API-001" should match API response
+    Then database vehicle "MD-API-013" should match API response
 
   # ============================================
   # CROSS-SYSTEM WORKFLOW

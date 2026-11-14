@@ -244,9 +244,7 @@ Then(
     const isVisible = await locator.isVisible().catch(() => false);
     
     if (!isVisible) {
-      // Element might not be visible in current context, store for later check
-      console.warn(`Element "${elementName}" not visible, marking for future verification`);
-      return;
+      throw new Error(`Element "${elementName}" is not visible, so its thumb-zone position cannot be checked`);
     }
 
     await assertInThumbZone(locator);

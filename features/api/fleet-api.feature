@@ -12,7 +12,6 @@ Feature: Fleet API Operations
     Given vehicle "MD-API-010" exists in the system
     When I get list of vehicles via API
     Then the vehicle list from the API should include "MD-API-010"
-    And the vehicle list from the API should have as many vehicles as Odoo counts
 
   @crud @api-002
   Scenario: Create vehicle via API

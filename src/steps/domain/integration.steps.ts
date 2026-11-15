@@ -73,21 +73,18 @@ When('I search for {string} in search', { timeout: 15000 }, async function (this
 
   let filled = false;
   for (const selector of searchSelectors) {
-    try {
-      const searchInput = this.page.locator(selector).first();
-      if (await searchInput.isVisible({ timeout: 2000 })) {
-        await searchInput.fill(searchTerm);
-        await this.page.keyboard.press('Enter');
-        filled = true;
-        break;
-      }
-    } catch {
-      // Try next selector
+    const searchInput = this.page.locator(selector).first();
+    if (await searchInput.isVisible().catch(() => false)) {
+      await searchInput.fill(searchTerm);
+      await this.page.keyboard.press('Enter');
+      await this.vehiclesListPage.waitForSearchApplied(searchTerm);
+      filled = true;
+      break;
     }
   }
 
   if (!filled) {
-    // Fallback: try search through vehicle list page method
+    // Fallback: the page object's search waits for the search box itself
     await this.vehiclesListPage.searchVehicle(searchTerm);
   }
 

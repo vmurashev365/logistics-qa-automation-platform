@@ -103,14 +103,26 @@ Feature: Security and Access Control
     And Odoo should still answer vehicle queries through JSON-RPC
 
   # ============================================
-  # API SECURITY TESTS
+  # BRUTE-FORCE PROTECTION
+  # Odoo counts failed logins per source address, so the lockout refuses the right
+  # password too and affects everything that signs in from this machine: @serial keeps
+  # other scenarios from running next to it in a parallel run.
   # ============================================
 
-  @api-security @security-011
-  Scenario: API rate limiting is enforced
-    Given I am authenticated as API client
-    When I make 100 rapid API requests
-    Then some requests should be rate limited
+  @authentication @lockout @serial @security-011
+  Scenario: Repeated failed logins lock out further attempts for a while
+    Given Odoo is configured to lock out logins from one address after 3 failed attempts for 10 seconds
+    When I attempt to login with invalid credentials 3 times
+    And I login with credentials "admin" and "admin"
+    Then the login page should say "Too many login failures, please wait a bit before trying again."
+    And I should not be signed in
+    When the login lockout period has passed
+    And I login with credentials "admin" and "admin"
+    Then I should be signed in as "admin"
+
+  # ============================================
+  # API SECURITY TESTS
+  # ============================================
 
   @api-security @security-012
   Scenario: Session information is refused without a session
@@ -121,7 +133,9 @@ Feature: Security and Access Control
   # GDPR / DATA PRIVACY TESTS
   # ============================================
 
-  @gdpr @security-013
+  # @wip: Odoo 17 Community with Fleet has no anonymisation feature to request. The scenario
+  # records the requirement; the suites exclude @wip, and its "When" step is pending.
+  @gdpr @security-013 @wip
   Scenario: Personal data can be anonymized
     Given driver "Test Driver GDPR" exists in the system
     And driver "Test Driver GDPR" has personal data stored

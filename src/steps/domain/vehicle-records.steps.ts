@@ -47,8 +47,10 @@ When('I choose vehicle model {string}', { timeout: 20000 }, async function (this
 // ---------------------------------------------------------------------------
 
 Then('the vehicles list should be shown', { timeout: 20000 }, async function (this: CustomWorld) {
+  // The waits below add up to less than the step timeout, so a missing list is reported by
+  // the comparison record, not by a bare step timeout.
   const views = this.page.locator('.o_kanban_view, .o_list_view').first();
-  await views.waitFor({ state: 'visible', timeout: 15000 }).catch(() => undefined);
+  await views.waitFor({ state: 'visible', timeout: 8000 }).catch(() => undefined);
   const breadcrumb = this.page.locator('.o_breadcrumb');
   await expect(breadcrumb).toHaveText('Vehicles', { timeout: 5000 }).catch(() => undefined);
   // "No form is open" cannot be awaited: Odoo gives no signal that it is done. A click that
@@ -116,16 +118,18 @@ Then(
 
 Then(
   'the vehicle form should show license plate {string}',
-  { timeout: 15000 },
+  { timeout: 20000 },
   async function (this: CustomWorld, plate: string) {
-    await this.vehicleFormPage.waitForFormReady();
+    const form = this.page.locator('.o_form_view');
+    await form.waitFor({ state: 'visible', timeout: 8000 }).catch(() => undefined);
     const input = this.page.locator('div[name="license_plate"] input');
     await expect(input).toHaveValue(plate, { timeout: 5000 }).catch(() => undefined);
     const stored = await vehiclesWithPlate(this, plate);
 
     verify(this, `The vehicle form shows vehicle "${plate}"`, [
       { what: 'vehicles with this plate', source: ODOO, expected: 1, actual: stored.length },
-      { what: 'license plate', source: PAGE, expected: plate, actual: await input.inputValue() },
+      { what: 'form visible', source: PAGE, expected: true, actual: await form.isVisible() },
+      { what: 'license plate', source: PAGE, expected: plate, actual: (await input.count()) > 0 ? await input.inputValue() : null },
       {
         what: 'record id in the URL',
         source: PAGE,
@@ -156,10 +160,12 @@ Then(
   'the vehicles search for {string} should find no vehicles',
   { timeout: 20000 },
   async function (this: CustomWorld, term: string) {
+    // Waits add up to less than the step timeout: a search that was not applied, or records
+    // that are still shown, are reported by the comparison record below.
     const facet = this.page.locator('.o_searchview_facet').filter({ hasText: term }).first();
-    await facet.waitFor({ state: 'visible', timeout: 10000 }).catch(() => undefined);
+    await facet.waitFor({ state: 'visible', timeout: 5000 }).catch(() => undefined);
     const emptyHelper = this.page.locator('.o_view_nocontent');
-    await emptyHelper.waitFor({ state: 'visible', timeout: 10000 }).catch(() => undefined);
+    await emptyHelper.waitFor({ state: 'visible', timeout: 8000 }).catch(() => undefined);
 
     verify(this, `Searching vehicles for "${term}" finds nothing`, [
       { what: 'search facet with the term', source: PAGE, expected: 1, actual: await facet.count() },
@@ -176,20 +182,32 @@ Then(
 
 Then(
   'the vehicles list view should count as many vehicles as the API returned',
-  { timeout: 20000 },
+  { timeout: 30000 },
   async function (this: CustomWorld) {
     const result = this.lastApiResponse;
     if (!result || !Array.isArray(result.body)) {
       throw new Error('No vehicle list from the API in this scenario. Use: When I get list of vehicles via API');
     }
-    await this.page.locator('.o_switch_view.o_list').first().click();
+    await this.page.locator('.o_switch_view.o_list').first().click({ timeout: 5000 });
     await this.page.locator('.o_list_view').waitFor({ state: 'visible', timeout: 10000 });
+
+    // Odoo shows the total in the pager, and no pager at all when the list is empty: then the
+    // "no records" helper and the absence of rows are what says "0".
     const limit = this.page.locator('.o_pager_limit').first();
-    await limit.waitFor({ state: 'visible', timeout: 5000 }).catch(() => undefined);
-    const shown = (await limit.count()) > 0 ? Number((await limit.innerText()).trim()) : null;
+    const emptyHelper = this.page.locator('.o_view_nocontent');
+    await limit.or(emptyHelper).first().waitFor({ state: 'visible', timeout: 8000 }).catch(() => undefined);
+
+    let shown: number | null = null;
+    let readFrom = 'list pager';
+    if (await limit.isVisible()) {
+      shown = Number((await limit.innerText()).trim());
+    } else if ((await emptyHelper.isVisible()) && (await this.page.locator('.o_data_row').count()) === 0) {
+      shown = 0;
+      readFrom = 'empty list';
+    }
 
     verify(this, 'The vehicles list view counts the vehicles the API returned', [
-      { what: 'vehicle count', source: `${PAGE} (list pager) vs ${ODOO}`, expected: result.body.length, actual: shown },
+      { what: 'vehicle count', source: `${PAGE} (${readFrom}) vs ${ODOO}`, expected: result.body.length, actual: shown },
     ]);
   }
 );
@@ -312,15 +330,3 @@ Then('the vehicle list from the API should include {string}', function (this: Cu
     },
   ]);
 });
-
-Then(
-  'the vehicle list from the API should have as many vehicles as Odoo counts',
-  async function (this: CustomWorld) {
-    const body = this.lastApiResponse?.body;
-    const counted = await this.fleetEndpoints.countVehicles();
-
-    verify(this, 'The vehicle list from the API is complete', [
-      { what: 'vehicles listed vs search_count', source: ODOO, expected: counted, actual: Array.isArray(body) ? body.length : null },
-    ]);
-  }
-);

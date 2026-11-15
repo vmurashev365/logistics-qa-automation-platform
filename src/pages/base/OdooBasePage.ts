@@ -235,7 +235,22 @@ export abstract class OdooBasePage extends BasePage {
     const searchInput = this.page.locator(this.selectors.searchInput);
     await searchInput.fill(query);
     await searchInput.press('Enter');
+    await this.waitForSearchApplied(query);
     await this.waitForLoadingComplete();
+  }
+
+  /**
+   * Wait until Odoo shows the search term as a facet in the search bar.
+   * A search typed while the view is being replaced is silently dropped; this turns that
+   * into a failure of the search itself instead of a wrong result later.
+   */
+  async waitForSearchApplied(query: string): Promise<void> {
+    const facet = this.page.locator(this.selectors.searchFacet).filter({ hasText: query }).first();
+    try {
+      await facet.waitFor({ state: 'visible', timeout: 5000 });
+    } catch {
+      throw new Error(`Odoo did not apply the search for "${query}": no search facet with this term appeared`);
+    }
   }
 
   /**

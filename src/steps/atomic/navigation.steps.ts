@@ -129,9 +129,17 @@ When('I navigate to {string} page', { timeout: 30000 }, async function (this: Cu
     }
   }
 
-  // Check if user is logged in (Home Menu visible means logged in)
-  const isLoggedIn = await this.page.getByTitle('Home Menu').isVisible({ timeout: 1000 }).catch(() => false);
-  
+  // Signed in or not? Right after a login the web client is still rendering, so wait until
+  // either the navbar or the login form is there instead of reading the page at once
+  // (isVisible does not wait). Neither within 5 s (e.g. a blank page) counts as signed out.
+  const homeMenu = this.page.getByTitle('Home Menu');
+  await homeMenu
+    .or(this.page.locator('form.oe_login_form'))
+    .first()
+    .waitFor({ state: 'visible', timeout: 5000 })
+    .catch(() => undefined);
+  const isLoggedIn = await homeMenu.isVisible().catch(() => false);
+
   // If not logged in, use direct URL navigation (for testing unauthorized access)
   if (!isLoggedIn) {
     const baseUrl = this.getTestData<string>('baseUrl') || this.getBaseUrl();
@@ -154,13 +162,26 @@ When('I navigate to {string} page', { timeout: 30000 }, async function (this: Cu
   const nav = menuNav || legacyMenuNavigation[pageName];
   
   if (nav) {
+    // Mark the action that is on screen now. Odoo keeps showing it until the new one is
+    // ready, and it can look the same (vehicles list -> vehicles list): without the mark the
+    // wait below would accept the old view, and anything typed into it would be lost.
+    const currentAction = this.page.locator('.o_action_manager > *').first();
+    if ((await currentAction.count()) > 0) {
+      await currentAction.evaluate((el) => el.setAttribute('data-qa-stale', '1'));
+    }
+
     // Navigate via Odoo menu
-    await this.page.getByTitle('Home Menu').click();
+    await homeMenu.click();
     // Use .first() to handle duplicate Fleet menu items in Odoo 17
     await this.page.getByRole('menuitem', { name: nav.app }).first().click();
-    
-    // Wait for list/kanban view to load
-    await this.page.locator('.o_list_view, .o_kanban_view, .o_form_view').first().waitFor({ state: 'visible', timeout: 15000 });
+
+    // Wait until the old action is gone and the new list/kanban/form view is shown
+    await this.page.locator('[data-qa-stale]').waitFor({ state: 'detached', timeout: 10000 });
+    await this.page
+      .locator('.o_action_manager')
+      .locator('.o_list_view, .o_kanban_view, .o_form_view')
+      .first()
+      .waitFor({ state: 'visible', timeout: 10000 });
     
     // If there's a submenu item, click it
     if (nav.menuItem) {

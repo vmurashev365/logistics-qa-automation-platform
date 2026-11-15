@@ -152,10 +152,6 @@ export class FleetEndpoints {
   }
 
   /**
-   * Search vehicles by partial license plate match
-   * @param platePattern - Partial license plate (uses ilike)
-   */
-  /**
    * All vehicles whose plate equals `plate`, archived ones included.
    * Use this to prove a record does or does not exist: the default search hides archived records.
    */
@@ -193,6 +189,10 @@ export class FleetEndpoints {
     await this.client.unlink(VEHICLE_MODEL, [id]);
   }
 
+  /**
+   * Search vehicles by partial license plate match
+   * @param platePattern - Partial license plate (uses ilike)
+   */
   async searchVehiclesByPlate(platePattern: string): Promise<Vehicle[]> {
     return this.client.searchRead<Vehicle>(
       VEHICLE_MODEL,

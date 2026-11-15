@@ -258,6 +258,13 @@ Common secondary tags you can use to slice scenarios:
 
 - `@critical`, `@quick-check`, `@galaxy-tab`, `@ipad-mini`, `@offline`
 
+Two tags change how a scenario runs:
+
+- `@wip` — the scenario records a requirement that cannot be checked on this stack yet. Every
+  `npm run test:*` script excludes it; its unfinished step reports as pending, not failed.
+- `@serial` — the scenario changes something all others depend on (the login lockout scenario
+  locks out logins from this machine for a few seconds). In a parallel run it runs alone.
+
 Module tags (use these to run specific functional areas):
 
 - `@module_finance` (Financial Compliance)

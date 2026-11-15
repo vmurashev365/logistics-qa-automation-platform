@@ -129,6 +129,33 @@ export class CustomWorld extends World<WorldParameters> {
     return this.testData.has(key);
   }
 
+  // Work a scenario must undo whatever its outcome (e.g. restore an Odoo setting it changed)
+  private cleanups: Array<{ label: string; run: () => Promise<void> }> = [];
+
+  /**
+   * Register work the After hook must do for this scenario, pass or fail.
+   * Cleanups run in reverse order of registration.
+   */
+  addCleanup(label: string, run: () => Promise<void>): void {
+    this.cleanups.push({ label, run });
+  }
+
+  /**
+   * Run and forget the registered cleanups. A cleanup that fails is reported and does not
+   * stop the others.
+   */
+  async runCleanups(): Promise<void> {
+    const pending = this.cleanups.reverse();
+    this.cleanups = [];
+    for (const cleanup of pending) {
+      try {
+        await cleanup.run();
+      } catch (error) {
+        console.log(`⚠️ Cleanup failed (${cleanup.label}): ${error}`);
+      }
+    }
+  }
+
   /**
    * Register a vehicle plate for deletion by the After hook.
    */

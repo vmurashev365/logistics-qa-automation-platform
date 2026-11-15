@@ -222,7 +222,7 @@ Before({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
  * After Hook
  * Handles cleanup, screenshots on failure, and resource disposal
  */
-After(async function (this: CustomWorld, scenario) {
+After({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
   const config = getEnvConfig();
 
   // Take screenshot on failure
@@ -284,6 +284,9 @@ After(async function (this: CustomWorld, scenario) {
       // Ignore cleanup errors
     }
   }
+
+  // Undo what the scenario registered (e.g. Odoo settings it changed)
+  await this.runCleanups();
 
   // Cleanup test vehicles created during this scenario
   const testVehicles = this.getTestData<string[]>('testVehicles') || [];

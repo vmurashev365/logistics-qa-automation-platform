@@ -177,10 +177,18 @@ export class FleetEndpoints {
   }
 
   /**
-   * Delete a vehicle together with the odometer readings and driver history that block unlink.
+   * Delete a vehicle together with the history that blocks unlink: in Odoo 17 the vehicle is a
+   * required field of driver history, odometer readings, service logs (where the fuel and
+   * inspection adapters write) and contracts, so Odoo refuses to delete a vehicle that has any.
    */
   async deleteVehicleAndHistory(id: number): Promise<void> {
-    for (const dependent of ['fleet.vehicle.assignation.log', 'fleet.vehicle.odometer']) {
+    const dependents = [
+      'fleet.vehicle.assignation.log',
+      'fleet.vehicle.odometer',
+      'fleet.vehicle.log.services',
+      'fleet.vehicle.log.contract',
+    ];
+    for (const dependent of dependents) {
       const ids = await this.client.search(dependent, [['vehicle_id', '=', id]]);
       if (ids.length > 0) {
         await this.client.unlink(dependent, ids);

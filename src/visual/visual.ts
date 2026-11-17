@@ -4,6 +4,7 @@ import * as path from 'path';
 import type { Page } from 'playwright';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
+import { envBoolean } from '../support/env';
 
 type VisualAssertOptions = {
   fullPage?: boolean;
@@ -11,8 +12,7 @@ type VisualAssertOptions = {
 };
 
 function isUpdateBaselineMode(): boolean {
-  const v = process.env.UPDATE_BASELINE;
-  return v === '1' || v?.toLowerCase() === 'true';
+  return envBoolean('UPDATE_BASELINE', false);
 }
 
 function ensureDir(dirPath: string) {
@@ -52,7 +52,11 @@ export async function assertPageMatchesBaseline(
 
   // Reduce flakiness: wait for the page to settle a bit.
   await page.waitForLoadState('domcontentloaded');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  // Wait for the view and its fonts. (No networkidle: Odoo keeps connections open, so it never
+  // arrives and only burns its timeout.)
+  await page.locator('.o_action_manager .o_view_controller').first().waitFor({ state: 'visible', timeout: 15000 });
+  await page.evaluate('document.fonts.ready');
+  // Odoo gives no signal when CSS transitions (e.g. kanban cards fading in) have finished
   await page.waitForTimeout(250);
 
   const baselineDir = path.resolve(process.cwd(), 'visual', 'baseline');

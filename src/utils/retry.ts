@@ -12,6 +12,8 @@ export interface RetryOptions {
   backoff: number;
   /** Optional callback on each retry */
   onRetry?: (error: Error, attempt: number) => void;
+  /** Return false for errors a new attempt cannot fix; they are thrown at once. Default: retry all. */
+  shouldRetry?: (error: Error) => boolean;
 }
 
 const DEFAULT_OPTIONS: RetryOptions = {
@@ -41,8 +43,8 @@ export async function retry<T>(
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       
-      if (attempt === opts.attempts) {
-        // Last attempt failed, throw the error
+      if (attempt === opts.attempts || (opts.shouldRetry && !opts.shouldRetry(lastError))) {
+        // Last attempt failed, or another attempt cannot help: throw the error
         break;
       }
 

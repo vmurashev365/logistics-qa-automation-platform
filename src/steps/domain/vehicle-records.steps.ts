@@ -14,6 +14,15 @@ import type { Vehicle } from '../../types/api';
 const ODOO = 'Odoo JSON-RPC';
 const PAGE = 'the page';
 
+/**
+ * Real records of the current list or kanban view. When a model has no records at all, Odoo
+ * fills the view with made-up sample records inside .o_view_sample_data, behind the "no records"
+ * helper; they are not data and must never be counted.
+ */
+const REAL_RECORDS =
+  '.o_content:not(.o_view_sample_data) .o_kanban_record:not(.o_kanban_ghost), ' +
+  '.o_content:not(.o_view_sample_data) .o_data_row';
+
 /** Odoo returns many2one values as [id, display name] or false. */
 function many2oneName(value: unknown): string | null {
   return Array.isArray(value) && typeof value[1] === 'string' ? value[1] : null;
@@ -145,7 +154,7 @@ Then(
   { timeout: 20000 },
   async function (this: CustomWorld, plate: string) {
     // hasText matches text content, so an injected <img> would not match: it would be an element.
-    const records = this.page.locator('.o_kanban_record, .o_data_row').filter({ hasText: plate });
+    const records = this.page.locator(REAL_RECORDS).filter({ hasText: plate });
     await records.first().waitFor({ state: 'visible', timeout: 10000 }).catch(() => undefined);
     const shown = await records.count();
 
@@ -174,7 +183,7 @@ Then(
         what: 'vehicle records shown',
         source: PAGE,
         expected: 0,
-        actual: await this.page.locator('.o_kanban_record:not(.o_kanban_ghost), .o_data_row').count(),
+        actual: await this.page.locator(REAL_RECORDS).count(),
       },
     ]);
   }
@@ -201,7 +210,7 @@ Then(
     let readFrom = 'list pager';
     if (await limit.isVisible()) {
       shown = Number((await limit.innerText()).trim());
-    } else if ((await emptyHelper.isVisible()) && (await this.page.locator('.o_data_row').count()) === 0) {
+    } else if ((await emptyHelper.isVisible()) && (await this.page.locator(REAL_RECORDS).count()) === 0) {
       shown = 0;
       readFrom = 'empty list';
     }

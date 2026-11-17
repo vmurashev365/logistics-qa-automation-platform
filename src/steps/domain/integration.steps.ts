@@ -9,7 +9,8 @@ import { expect } from '@playwright/test';
 import { CustomWorld } from '../../support/custom-world';
 import { UI_MAP } from '../../ui-map';
 import { Vehicle } from '../../types/api';
-import { verify, Check } from '../../support/evidence';
+import { verify } from '../../support/evidence';
+import { firstVisible, isVisibleWithin } from '../../utils/wait';
 
 // =============================================================================
 // Message Verification Steps (UI-MAP pattern)
@@ -265,30 +266,31 @@ When('I click on vehicle {string}', { timeout: 15000 }, async function (this: Cu
 });
 
 /**
+ * Odoo 17 forms are editable without an "Edit" button; older versions show one. Checked at once:
+ * the form is already rendered when this runs.
+ */
+async function enterEditModeIfNeeded(world: CustomWorld): Promise<void> {
+  const editBtn = world.page.locator('.o_form_button_edit');
+  if (await editBtn.isVisible().catch(() => false)) {
+    await editBtn.click();
+    await world.page.locator('.o_form_view .o_form_editable').first().waitFor({ state: 'visible', timeout: 5000 });
+  }
+}
+
+/**
  * When I update odometer to {int}
  * Updates odometer when already on vehicle form
  */
 When('I update odometer to {int}', { timeout: 30000 }, async function (this: CustomWorld, odometerValue: number) {
   // Wait for form
   await this.vehicleFormPage.waitForFormReady();
-
-  // Click edit if not in edit mode
-  try {
-    const editBtn = this.page.locator('.o_form_button_edit');
-    if (await editBtn.isVisible({ timeout: 1000 })) {
-      await editBtn.click();
-      await this.page.waitForTimeout(500);
-    }
-  } catch {
-    // Already in edit mode
-  }
+  await enterEditModeIfNeeded(this);
 
   // Update odometer
   await this.vehicleFormPage.fillField('odometer', odometerValue.toString());
 
-  // Save
+  // Save: waits until Odoo has saved, or fails with what Odoo showed
   await this.vehicleFormPage.clickSave();
-  await this.page.waitForTimeout(1000);
 
   this.setTestData('updatedOdometer', odometerValue);
   console.log(`✅ Updated odometer to ${odometerValue}`);
@@ -301,53 +303,39 @@ When('I update odometer to {int}', { timeout: 30000 }, async function (this: Cus
 When('I assign driver {string} via UI', { timeout: 30000 }, async function (this: CustomWorld, driverName: string) {
   // Wait for form to be ready
   await this.vehicleFormPage.waitForFormReady();
+  await enterEditModeIfNeeded(this);
 
-  // Click edit if not in edit mode
-  try {
-    const editBtn = this.page.locator('.o_form_button_edit');
-    if (await editBtn.isVisible({ timeout: 1000 })) {
-      await editBtn.click();
-      await this.page.waitForTimeout(500);
-    }
-  } catch {
-    // Already in edit mode
-  }
+  // A driver this step creates is deleted after the scenario; an existing one is left alone.
+  this.trackNewPartners(driverName, await this.partnerIdsNamed(driverName));
 
-  // Click on Driver field to open dropdown
-  const driverField = this.page.locator('div[name="driver_id"]');
-  await driverField.click();
-  await this.page.waitForTimeout(300);
-
-  // Type driver name to search
+  // Type the driver's name into the Driver field
   const driverInput = this.page.locator('div[name="driver_id"] input');
   await driverInput.fill(driverName);
-  await this.page.waitForTimeout(500);
 
-  // Try to select existing driver or create new one
-  const existingOption = this.page.locator('.o-autocomplete--dropdown-menu .o-autocomplete--dropdown-item').filter({
-    hasText: new RegExp(`^${driverName}$`, 'i')
-  }).first();
-
-  if (await existingOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-    // Select existing driver
-    await existingOption.click();
-  } else {
-    // Look for "Create" option
-    const createOption = this.page.locator('.o-autocomplete--dropdown-menu').getByText(`Create "${driverName}"`).first();
-    if (await createOption.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await createOption.click();
-    } else {
-      // Try clicking first dropdown option
-      const firstOption = this.page.locator('.o-autocomplete--dropdown-menu .o-autocomplete--dropdown-item').first();
-      await firstOption.click();
-    }
+  // Wait for Odoo's suggestions: the existing driver (exact name) or "Create "<name>"".
+  // Never pick another partner: the assignment would look done with the wrong driver.
+  const items = this.page.locator('.o-autocomplete--dropdown-menu .o-autocomplete--dropdown-item');
+  const escaped = driverName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const choice = await firstVisible(
+    [
+      items.filter({ hasText: new RegExp(`^\\s*${escaped}\\s*$`, 'i') }),
+      items.filter({ hasText: `Create "${driverName}"` }),
+    ],
+    8000
+  );
+  if (!choice) {
+    const offered = (await items.allInnerTexts()).map((text) => text.trim());
+    throw new Error(
+      `Odoo offered neither driver "${driverName}" nor to create it. Offered: ${offered.join(', ') || 'nothing'}`
+    );
   }
+  await choice.click();
 
-  await this.page.waitForTimeout(500);
+  // The field shows the driver once Odoo has resolved (or created) the partner
+  await expect(driverInput).toHaveValue(driverName, { timeout: 10000 });
 
-  // Save the form
+  // Save: waits until Odoo has saved, or fails with what Odoo showed
   await this.vehicleFormPage.clickSave();
-  await this.page.waitForTimeout(1000);
 
   this.setTestData('assignedDriver', driverName);
   console.log(`✅ Assigned driver "${driverName}" via UI`);
@@ -437,10 +425,7 @@ When('I delete current vehicle', { timeout: 30000 }, async function (this: Custo
   await deleteOption.waitFor({ state: 'visible', timeout: 5000 });
   await deleteOption.click();
 
-  // Wait for confirmation dialog "Bye-bye, record!"
-  await this.page.waitForTimeout(500);
-
-  // Click Delete button in modal (btn-primary with text "Delete")
+  // Confirmation dialog "Bye-bye, record!": wait for its Delete button (no fixed pause)
   const confirmDeleteBtn = this.page.locator('.modal-footer button.btn-primary:has-text("Delete")');
   await confirmDeleteBtn.waitFor({ state: 'visible', timeout: 5000 });
   await confirmDeleteBtn.click();
@@ -530,31 +515,9 @@ Then('API response should return empty results', async function (this: CustomWor
   expect(isEmpty).toBe(true);
 });
 
-/**
- * Then I should not see {string} in vehicle list
- * Verifies vehicle is NOT visible in current list/kanban view
- */
-Then('I should not see {string} in vehicle list', { timeout: 10000 }, async function (
-  this: CustomWorld,
-  plate: string
-) {
-  await this.vehiclesListPage.waitForLoadingComplete();
-  
-  // Check that vehicle is NOT visible in list or kanban
-  const listRow = this.page.locator('.o_data_row').filter({
-    has: this.page.locator(`td:has-text("${plate}")`)
-  }).first();
-  
-  const kanbanCard = this.page.locator('.o_kanban_record').filter({
-    hasText: plate
-  }).first();
-  
-  const listVisible = await listRow.isVisible({ timeout: 1000 }).catch(() => false);
-  const kanbanVisible = await kanbanCard.isVisible({ timeout: 1000 }).catch(() => false);
-  
-  expect(listVisible || kanbanVisible).toBe(false);
-  console.log(`✅ Vehicle "${plate}" is NOT visible in list (as expected)`);
-});
+// "I should not see {string} in vehicle list" was removed: it read the list without waiting,
+// so it passed while the view was still loading. Use: I search for "<plate>" in search,
+// then: the vehicles search for "<plate>" should find no vehicles.
 
 /**
  * Then API response should be empty or archived
@@ -631,37 +594,13 @@ Then('I should see odometer value {string}', { timeout: 10000 }, async function 
   // Look for odometer field value
   const odometerField = this.page.locator('[name="odometer"], [name="odometer_count"]').first();
   
-  if (await odometerField.isVisible({ timeout: 3000 })) {
+  if (await isVisibleWithin(odometerField, 3000)) {
     const actualValue = await odometerField.inputValue();
     expect(actualValue).toContain(expectedValue);
   } else {
     // Fall back to text match
     await expect(this.page.locator(`text=${expectedValue}`)).toBeVisible({ timeout: 5000 });
   }
-});
-
-/**
- * Then test environment should be clean
- * Verifies test cleanup was successful
- */
-Then('test environment should be clean', async function (this: CustomWorld) {
-  // The prefixes come from the "I cleanup test vehicles with prefix" steps of this scenario.
-  const prefixes = this.getTestData<string[]>('cleanedPrefixes') || [];
-  if (prefixes.length === 0) {
-    throw new Error('No cleanup step ran in this scenario, so there is nothing to check');
-  }
-
-  const checks: Check[] = [];
-  for (const prefix of prefixes) {
-    const left = await this.fleetEndpoints.findVehiclesByPlatePrefixIncludingArchived(prefix);
-    checks.push({
-      what: `vehicles with plate ${prefix}*, archived included`,
-      source: 'Odoo JSON-RPC',
-      expected: [],
-      actual: left.map((vehicle) => vehicle.license_plate),
-    });
-  }
-  verify(this, 'No test vehicles are left', checks);
 });
 
 /**

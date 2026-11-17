@@ -5,8 +5,8 @@ Feature: Web UI and API Data Consistency
   So that users see the same data regardless of interface
 
   Background:
-    Given Odoo is accessible at "http://localhost:8069"
-    And I login with username "admin" and password "admin"
+    Given Odoo is accessible
+    And I am logged in as admin
     And Odoo API is authenticated
 
   @critical @sync-001
@@ -39,7 +39,9 @@ Feature: Web UI and API Data Consistency
     And I search for "MD-SYNC-003" in search
     Then the vehicles search for "MD-SYNC-003" should find no vehicles
 
-  @sync-004
+  # Counts every vehicle in Odoo, so it must not run next to scenarios that create or delete
+  # vehicles: @serial keeps it alone in a parallel run.
+  @sync-004 @serial
   Scenario: Count vehicles matches between UI and API
     When I get list of vehicles via API
     And I navigate to "Vehicles" page

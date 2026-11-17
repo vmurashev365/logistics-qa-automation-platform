@@ -101,7 +101,7 @@ and compliance with data protection regulations (GDPR, CCPA).
 ```gherkin
 @smoke @demo-data
 Scenario: View demo vehicles
-  Given Odoo is accessible at "http://localhost:8069"
+  Given Odoo is accessible
   And I am logged in as admin
   When I navigate to "vehicles" page
   Then I should see at least 5 vehicles

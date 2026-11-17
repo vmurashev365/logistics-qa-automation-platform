@@ -31,7 +31,6 @@
   },
   "include": [
     "src/**/*.ts",
-    "cucumber.config.ts",
     "scripts/**/*.ts"
   ],
   "exclude": [

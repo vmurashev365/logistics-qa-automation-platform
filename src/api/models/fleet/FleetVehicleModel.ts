@@ -57,57 +57,74 @@ export class FleetVehicleModel {
   }
 
   /**
-   * Get a vehicle by its Odoo `name`.
-   * @param name - Vehicle display name
-   * @throws If no matching vehicle exists
+   * Active vehicles with exactly this license plate.
+   *
+   * Vehicles are identified by plate, not by `name`: in Odoo `name` is computed as
+   * "Brand/Model/Plate", so a test name such as "Truck-01" never equals it. Looking vehicles up
+   * by name found nothing on every run and created a new vehicle each time.
    */
-  async getByName(name: string): Promise<FleetVehicle> {
+  async findByLicensePlate(plate: string): Promise<FleetVehicle[]> {
     const records = await this.client.searchRead<OdooFleetVehicleRecord>(
       this.vehicleModelName,
-      [['name', '=', name]],
-      ['id', 'name', 'license_plate', 'odometer', 'odometer_unit', 'active'],
-      { limit: 1 }
+      [['license_plate', '=', plate]],
+      ['id', 'name', 'license_plate', 'odometer', 'odometer_unit', 'active']
     );
-
-    if (records.length === 0) {
-      throw new Error(`FleetVehicleModel.getByName: Vehicle not found: ${name}`);
-    }
-
-    return FleetVehicleModel.toDomain(records[0]);
+    return records.map((record) => FleetVehicleModel.toDomain(record));
   }
 
   /**
-   * Ensure a fleet vehicle exists. If not found by name, it is created.
+   * The one active vehicle with this license plate. No vehicle, or several, is an error.
+   */
+  async getByLicensePlate(plate: string): Promise<FleetVehicle> {
+    const vehicles = await this.findByLicensePlate(plate);
+    if (vehicles.length !== 1) {
+      throw new Error(
+        `FleetVehicleModel.getByLicensePlate: expected one vehicle with plate "${plate}", found ${vehicles.length}`
+      );
+    }
+    return vehicles[0];
+  }
+
+  /**
+   * Reuse the vehicle with the plate derived from `input`, or create it.
+   * `created` tells the caller whether it must delete the vehicle afterwards. Several vehicles
+   * with the plate are an error: picking one would hide duplicates.
    *
    * Odoo Fleet requires `model_id`, which is auto-provisioned for test usage.
-   * @param input - Vehicle properties
    */
-  async ensureExists(input: EnsureFleetVehicleInput): Promise<FleetVehicle> {
-    try {
-      return await this.getByName(input.name);
-    } catch {
-      const modelId = await this.getOrCreateDefaultVehicleModelId();
-      const createdId = await this.client.create(this.vehicleModelName, {
-        name: input.name,
-        license_plate: input.licensePlate ?? FleetVehicleModel.deriveLicensePlate(input.name),
-        model_id: modelId,
-        odometer: input.odometer ?? 0,
-        odometer_unit: FleetVehicleModel.toOdooOdometerUnit(input.odometerUnit),
-        active: input.active ?? true,
-      });
-
-      const created = await this.client.read<OdooFleetVehicleRecord>(
-        this.vehicleModelName,
-        [createdId],
-        ['id', 'name', 'license_plate', 'odometer', 'odometer_unit', 'active']
+  async ensureExists(input: EnsureFleetVehicleInput): Promise<{ vehicle: FleetVehicle; created: boolean }> {
+    const plate = input.licensePlate ?? FleetVehicleModel.licensePlateFor(input.name);
+    const existing = await this.findByLicensePlate(plate);
+    if (existing.length > 1) {
+      throw new Error(
+        `FleetVehicleModel.ensureExists: ${existing.length} vehicles have license plate "${plate}", ` +
+          'expected at most one. Remove the duplicates, e.g. with npm run db:clean.'
       );
-
-      if (created.length === 0) {
-        throw new Error(`FleetVehicleModel.ensureExists: Created vehicle not readable: id=${createdId}`);
-      }
-
-      return FleetVehicleModel.toDomain(created[0]);
     }
+    if (existing.length === 1) {
+      return { vehicle: existing[0], created: false };
+    }
+
+    const modelId = await this.getOrCreateDefaultVehicleModelId();
+    const createdId = await this.client.create(this.vehicleModelName, {
+      license_plate: plate,
+      model_id: modelId,
+      odometer: input.odometer ?? 0,
+      odometer_unit: FleetVehicleModel.toOdooOdometerUnit(input.odometerUnit),
+      active: input.active ?? true,
+    });
+
+    const created = await this.client.read<OdooFleetVehicleRecord>(
+      this.vehicleModelName,
+      [createdId],
+      ['id', 'name', 'license_plate', 'odometer', 'odometer_unit', 'active']
+    );
+
+    if (created.length === 0) {
+      throw new Error(`FleetVehicleModel.ensureExists: Created vehicle not readable: id=${createdId}`);
+    }
+
+    return { vehicle: FleetVehicleModel.toDomain(created[0]), created: true };
   }
 
   /**
@@ -201,7 +218,10 @@ export class FleetVehicleModel {
     return undefined;
   }
 
-  private static deriveLicensePlate(name: string): string {
+  /**
+   * The license plate the framework uses for a test vehicle name, e.g. "Truck 01" -> "TRUCK-01".
+   */
+  static licensePlateFor(name: string): string {
     // Keep it deterministic and compatible with Odoo constraints.
     return name.trim().toUpperCase().replace(/\s+/g, '-').slice(0, 16) || 'AUTO-TEST';
   }

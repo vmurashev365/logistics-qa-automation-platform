@@ -93,9 +93,7 @@ When(
     console.log('  5. Clicking save button...');
     await this.vehicleFormPage.clickSave();
     console.log('  5. ✓ Save button clicked');
-    
-    // Wait for save to complete
-    await this.page.waitForTimeout(1000);
+
 
     // Store the registered plate for later assertions
     this.setTestData('registeredVehicle', plate);
@@ -128,7 +126,6 @@ When(
 
     // Save the vehicle
     await this.vehicleFormPage.clickSave();
-    await this.page.waitForTimeout(1000);
 
     this.setTestData('registeredVehicle', plate);
     this.setTestData('vehicleDetails', details);
@@ -157,7 +154,6 @@ When(
 
     // Save changes
     await this.vehicleFormPage.clickSave();
-    await this.page.waitForTimeout(1000);
 
     this.setTestData('assignedDriver', driverName);
     console.log(`✅ Assigned driver "${driverName}" to vehicle "${plate}"`);
@@ -217,7 +213,6 @@ When(
 
     // Save
     await this.vehicleFormPage.clickSave();
-    await this.page.waitForTimeout(1000);
 
     this.setTestData('updatedOdometer', odometerValue);
     console.log(`✅ Updated odometer for "${plate}" to ${odometerValue}`);
@@ -318,7 +313,6 @@ When(
           await this.vehicleFormPage.waitForFormReady();
           await this.vehicleFormPage.fillLicensePlate(plate);
           await this.vehicleFormPage.clickSave();
-          await this.page.waitForTimeout(500);
         }
         
         createdPlates.push(plate);
@@ -332,26 +326,6 @@ When(
   }
 );
 
-// ============================================
-// CLEANUP WORKFLOWS
-// ============================================
-
-When(
-  'I cleanup test vehicles with prefix {string}',
-  { timeout: 30000 },
-  async function (this: CustomWorld, prefix: string) {
-    // Delete through Odoo (not an archive in PostgreSQL, which would leave the rows behind),
-    // archived vehicles included, together with the history that blocks unlink.
-    const vehicles = await this.fleetEndpoints.findVehiclesByPlatePrefixIncludingArchived(prefix);
-    for (const vehicle of vehicles) {
-      if (vehicle.id !== undefined) {
-        await this.fleetEndpoints.deleteVehicleAndHistory(vehicle.id);
-      }
-    }
-    console.log(`🗑️ Deleted ${vehicles.length} vehicles with plate ${prefix}*`);
-
-    const prefixes = this.getTestData<string[]>('cleanedPrefixes') || [];
-    prefixes.push(prefix);
-    this.setTestData('cleanedPrefixes', prefixes);
-  }
-);
+// Cleanup: each scenario removes what it created (After hook) and the leftovers of the plates
+// it names (Before hook). There is no "clean up everything with a prefix" step: run in
+// parallel, it would delete the vehicles of scenarios that are still running.

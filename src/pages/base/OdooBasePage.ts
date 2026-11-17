@@ -151,9 +151,36 @@ export abstract class OdooBasePage extends BasePage {
    */
   async clickSave(): Promise<void> {
     await this.waitForLoadingComplete();
-    const saveBtn = this.page.locator(this.selectors.saveButton);
+    // The form's own save button (a dialog may add another .o_form_button_save)
+    const saveBtn = this.page.locator(`.o_form_status_indicator ${this.selectors.saveButton}`).first();
     await saveBtn.click();
-    await this.waitForLoadingComplete();
+    await this.waitForSaveOutcome();
+  }
+
+  /**
+   * Wait until Odoo has either saved the form or refused to. Saved: the form's status buttons
+   * get the class "invisible" (nothing left to save). Refused: an "Invalid fields" notification
+   * or an error dialog. A refusal or no answer at all fails with what Odoo showed, so a step
+   * never carries on as if the record had been saved.
+   */
+  async waitForSaveOutcome(timeoutMs = 10000): Promise<void> {
+    const saved = this.page.locator('.o_form_view .o_form_status_indicator_buttons.invisible');
+    const invalid = this.page.locator(this.selectors.notification).filter({ hasText: 'Invalid fields' });
+    const errorDialog = this.page.locator('.o_error_dialog, .modal .modal-title:text-matches("error", "i")');
+    try {
+      await saved.or(invalid).or(errorDialog).first().waitFor({ state: 'attached', timeout: timeoutMs });
+    } catch {
+      throw new Error(`Odoo did not confirm the save within ${timeoutMs} ms`);
+    }
+    if ((await saved.count()) === 0) {
+      const shown = [
+        ...(await invalid.allInnerTexts()),
+        ...(await this.page.locator('.modal .modal-body').allInnerTexts()),
+      ]
+        .map((text) => text.replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+      throw new Error(`Odoo did not save the form: ${shown.join(' | ') || 'an error was shown'}`);
+    }
   }
 
   /**

@@ -8,6 +8,6 @@ Feature: Fleet Fuel and Compliance Management
 
   @integration @fleet @inspection
   Scenario: Record inspection for truck
-    Given a fleet vehicle "Truck-01" exists
-    When I record a "pass" inspection for truck "Truck-01"
+    Given a fleet vehicle "Truck-02" exists
+    When I record a "pass" inspection for truck "Truck-02"
     Then inspection should be visible in fleet records

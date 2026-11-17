@@ -7,6 +7,7 @@
 import { Given, When, Then, DataTable } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 import { CustomWorld } from '../../support/custom-world';
+import { isVisibleWithin } from '../../utils/wait';
 
 /**
  * When I create new vehicle with:
@@ -29,16 +30,8 @@ When('I create new vehicle with:', { timeout: 30000 }, async function (this: Cus
     await this.vehicleFormPage.fillField(fieldKey, value);
   }
 
-  // Save
+  // Save: waits until Odoo has saved, or fails with what Odoo showed
   await this.vehicleFormPage.clickSave();
-
-  // Wait for success
-  try {
-    await this.vehicleFormPage.waitForSuccessMessage();
-  } catch {
-    // Some Odoo versions don't show notification, check if saved by URL change
-    await this.page.waitForLoadState('networkidle');
-  }
 
   // Store for cleanup
   if (data.licensePlate) {
@@ -201,7 +194,7 @@ Given('vehicle {string} exists', { timeout: 30000 }, async function (this: Custo
   try {
     await this.vehiclesListPage.navigateToVehicles(this.getBaseUrl());
     await this.vehiclesListPage.searchVehicle(plate);
-    const vehicleExists = await this.vehiclesListPage.getVehicleByPlate(plate).isVisible({ timeout: 3000 });
+    const vehicleExists = await isVisibleWithin(this.vehiclesListPage.getVehicleByPlate(plate), 3000);
     if (vehicleExists) {
       console.log(`   Vehicle ${plate} already exists`);
       return;

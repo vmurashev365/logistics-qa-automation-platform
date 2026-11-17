@@ -7,6 +7,7 @@ import { Page } from 'playwright';
 import { expect } from '@playwright/test';
 import { OdooBasePage } from '../../base/OdooBasePage';
 import { UI_MAP, FieldKey, isValidFieldKey } from '../../../ui-map';
+import { firstVisible } from '../../../utils/wait';
 
 /**
  * Vehicle form data interface
@@ -104,49 +105,22 @@ export class VehicleFormPage extends OdooBasePage {
       ? UI_MAP.fields[fieldKey as FieldKey]
       : fieldKey; // Fallback to raw key if not in UI-MAP
 
-    // Try multiple strategies for filling the field
-    try {
-      // Strategy 1: By label with exact match
-      const fieldByLabel = this.page.getByLabel(fieldLabel, { exact: true });
-      if (await fieldByLabel.isVisible({ timeout: 2000 })) {
-        await fieldByLabel.fill(value);
-        return;
-      }
-    } catch {
-      // Continue to next strategy
-    }
-
-    try {
-      // Strategy 2: By label with partial match (Odoo adds ? to some labels)
-      const fieldByPartialLabel = this.page.getByLabel(new RegExp(fieldLabel, 'i'));
-      if (await fieldByPartialLabel.isVisible({ timeout: 2000 })) {
-        await fieldByPartialLabel.fill(value);
-        return;
-      }
-    } catch {
-      // Continue to next strategy
-    }
-
-    try {
-      // Strategy 3: By role textbox
-      const fieldByRole = this.page.getByRole('textbox', { name: new RegExp(fieldLabel, 'i') });
-      if (await fieldByRole.isVisible({ timeout: 2000 })) {
-        await fieldByRole.fill(value);
-        return;
-      }
-    } catch {
-      // Continue to next strategy
-    }
-
-    // Strategy 4: By name attribute (snake_case conversion)
+    // Wait for any strategy at once, preferring them in this order: exact label, partial label
+    // (Odoo adds "?" to some labels), textbox role, Odoo field name (snake_case)
     const snakeCaseKey = this.toSnakeCase(fieldKey);
-    const fieldByName = this.page.locator(`[name="${snakeCaseKey}"] input, input[name="${snakeCaseKey}"]`);
-    if (await fieldByName.isVisible({ timeout: 2000 })) {
-      await fieldByName.fill(value);
-      return;
+    const field = await firstVisible(
+      [
+        this.page.getByLabel(fieldLabel, { exact: true }),
+        this.page.getByLabel(new RegExp(fieldLabel, 'i')),
+        this.page.getByRole('textbox', { name: new RegExp(fieldLabel, 'i') }),
+        this.page.locator(`[name="${snakeCaseKey}"] input, input[name="${snakeCaseKey}"]`),
+      ],
+      8000
+    );
+    if (!field) {
+      throw new Error(`Could not find field: ${fieldKey} (label: ${fieldLabel})`);
     }
-
-    throw new Error(`Could not find field: ${fieldKey} (label: ${fieldLabel})`);
+    await field.fill(value);
   }
 
   /**

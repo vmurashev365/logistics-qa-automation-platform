@@ -5,7 +5,7 @@ Feature: Complete Vehicle Lifecycle
   So that users see accurate information everywhere
 
   Background:
-    Given I am logged in as "admin"
+    Given I am logged in as admin
 
   # ============================================
   # END-TO-END DATA SYNC TESTS (All via UI)
@@ -243,10 +243,10 @@ Feature: Complete Vehicle Lifecycle
   @api-db-consistency @integration-012
   Scenario: API creation persists to database immediately
     # Create via API
-    When I create vehicle via API with plate "MD-API-001"
+    When I create vehicle via API with plate "MD-API-012"
 
     # Verify immediate persistence
-    Then database should contain vehicle plate "MD-API-001"
+    Then database should contain vehicle plate "MD-API-012"
 
   @api-db-consistency @integration-013
   Scenario: Database state matches API response
@@ -288,13 +288,3 @@ Feature: Complete Vehicle Lifecycle
     # 6. Sync offline
     When I sync offline data
     Then offline sync status should show "synced"
-
-  @cleanup @integration-999
-  Scenario: Cleanup test data
-    When I cleanup test vehicles with prefix "MD-E2E"
-    And I cleanup test vehicles with prefix "MD-DRV"
-    And I cleanup test vehicles with prefix "MD-CTI"
-    And I cleanup test vehicles with prefix "MD-OFF"
-    And I cleanup test vehicles with prefix "MD-API"
-    And I cleanup test vehicles with prefix "MD-FULL"
-    Then test environment should be clean

@@ -4,7 +4,7 @@
  */
 
 import { Page, Locator } from 'playwright';
-import { waitForNetworkIdle, waitForVisible, sleep } from '../../utils/wait';
+import { waitForVisible, sleep } from '../../utils/wait';
 
 /**
  * Abstract base page class
@@ -34,13 +34,6 @@ export abstract class BasePage {
   async waitForPageLoad(): Promise<void> {
     await this.page.waitForLoadState('domcontentloaded');
     await this.page.waitForLoadState('load');
-  }
-
-  /**
-   * Wait for network to be idle
-   */
-  async waitForNetworkIdle(): Promise<void> {
-    await waitForNetworkIdle(this.page, { timeout: this.defaultTimeout });
   }
 
   /**

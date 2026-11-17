@@ -350,12 +350,9 @@ docker exec -it logistics-qa-postgres psql -U odoo -d logistics_qa_db
 
 **A. Increase Timeouts**:
 
-```typescript
-// In cucumber.config.ts
-export default {
-  timeout: 60000, // Increase to 60 seconds for CI
-  // ...
-};
+```bash
+# Browser action timeout for the run (ms); steps keep their own limits
+TIMEOUT=60000 npm run test:smoke
 ```
 
 **B. Add Retry Logic**:

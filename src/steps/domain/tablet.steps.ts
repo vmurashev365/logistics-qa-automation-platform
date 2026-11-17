@@ -28,6 +28,7 @@ import {
   TabletConstants,
 } from '../../ui-map/tablet';
 import { CUSTOM_DEVICES, DEVICE_VIEWPORTS } from '../../../playwright.config';
+import { firstVisible } from '../../utils/wait';
 
 // ============================================
 // Device Context Steps
@@ -414,30 +415,21 @@ Then(
  */
 Then(
   'the {string} button should be visible',
+  { timeout: 15000 },
   async function (this: CustomWorld, buttonText: string) {
-    // Try multiple Odoo button selectors
-    const selectors = [
+    // Odoo button selectors, and the button's accessible name (Odoo 17 icon buttons such as
+    // "Discard" have no text, only an aria-label). All are awaited together.
+    const candidates = [
       `button:has-text("${buttonText}")`,
       `button span:has-text("${buttonText}")`,
       `.o_form_button_save:has-text("${buttonText}")`,
       `[name="action_save"]:has-text("${buttonText}")`,
       `.btn:has-text("${buttonText}")`,
-    ];
-    
-    let found = false;
-    for (const selector of selectors) {
-      const button = this.page.locator(selector).first();
-      if (await button.isVisible({ timeout: 1000 }).catch(() => false)) {
-        found = true;
-        break;
-      }
-    }
-    
-    if (!found) {
-      // Fallback: use getByRole which is more resilient
-      const roleButton = this.page.getByRole('button', { name: buttonText });
-      await expect(roleButton.first()).toBeVisible({ timeout: 5000 });
-    }
+    ].map((selector) => this.page.locator(selector));
+    candidates.push(this.page.getByRole('button', { name: buttonText }));
+
+    const button = await firstVisible(candidates, 8000);
+    expect(button !== null, `button "${buttonText}" visible`).toBe(true);
   }
 );
 

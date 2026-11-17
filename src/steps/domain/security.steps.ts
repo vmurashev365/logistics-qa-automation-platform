@@ -529,23 +529,44 @@ When('the login lockout period has passed', { timeout: 90000 }, async function (
 });
 
 /**
+ * When I try to sign in with the administrator credentials
+ * Submits the login form with ODOO_USERNAME / ODOO_PASSWORD and does not expect success.
+ */
+When('I try to sign in with the administrator credentials', { timeout: 30000 }, async function (this: CustomWorld) {
+  const config = getEnvConfig();
+  await this.loginPage.navigate(this.getBaseUrl());
+  await this.loginPage.attemptLogin(config.odooUsername, config.odooPassword);
+});
+
+/**
+ * Then I should be signed in as the administrator
+ */
+Then('I should be signed in as the administrator', { timeout: 20000 }, async function (this: CustomWorld) {
+  await assertSignedInAs(this, getEnvConfig().odooUsername);
+});
+
+/**
  * Then I should be signed in as {string}
  * The web client is shown and the browser's own session belongs to the user.
  */
 Then('I should be signed in as {string}', { timeout: 20000 }, async function (this: CustomWorld, login: string) {
-  const navbar = this.page.locator('.o_main_navbar');
+  await assertSignedInAs(this, login);
+});
+
+async function assertSignedInAs(world: CustomWorld, login: string): Promise<void> {
+  const navbar = world.page.locator('.o_main_navbar');
   await navbar.waitFor({ state: 'visible', timeout: 10000 }).catch(() => undefined);
-  const response = await this.page.request.post(`${this.getBaseUrl()}/web/session/get_session_info`, {
+  const response = await world.page.request.post(`${world.getBaseUrl()}/web/session/get_session_info`, {
     data: { jsonrpc: '2.0', method: 'call', params: {}, id: 1 },
   });
   const body = (await response.json().catch(() => null)) as { result?: { username?: string } } | null;
 
-  verify(this, `The browser is signed in as "${login}"`, [
+  verify(world, `The browser is signed in as "${login}"`, [
     { what: 'Odoo main navbar visible', source: PAGE, expected: true, actual: await navbar.isVisible() },
     { what: 'session user', source: `${ODOO} (browser session)`, expected: login, actual: body?.result?.username ?? null },
   ]);
-  this.setTestData('username', login);
-});
+  world.setTestData('username', login);
+}
 
 // =============================================================================
 // GDPR / Data Privacy Steps
@@ -570,6 +591,8 @@ Given('driver {string} exists in the system', { timeout: 30000 }, async function
   driverName: string
 ) {
   if ((await partnerIdByName(this, driverName)) === null) {
+    // Created here, so deleted after the scenario
+    this.trackNewPartners(driverName, []);
     await this.odooApi.create('res.partner', {
       name: driverName,
       email: `${driverName.toLowerCase().replace(/\s/g, '.')}@test.com`,
@@ -652,6 +675,8 @@ Given('driver {string} exists with full profile', { timeout: 30000 }, async func
 
   let id = await partnerIdByName(this, driverName);
   if (id === null) {
+    // Created here, so deleted after the scenario
+    this.trackNewPartners(driverName, []);
     id = await this.odooApi.create('res.partner', { name: driverName, ...values });
   } else {
     await this.odooApi.write('res.partner', [id], values);

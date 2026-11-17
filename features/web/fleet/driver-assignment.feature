@@ -5,7 +5,7 @@ Feature: Driver Assignment
   So that I can track who operates each vehicle
 
   Background:
-    Given Odoo is accessible at "http://localhost:8069"
+    Given Odoo is accessible
     And I am logged in as admin
 
   @smoke
@@ -22,5 +22,5 @@ Feature: Driver Assignment
     When I navigate to "vehicles" page
     And I search for "MD-DRV-011" in search
     And I click on vehicle "MD-DRV-011"
-    And I assign driver "Ion Popescu" via UI
-    Then vehicle "MD-DRV-011" should have driver "Ion Popescu" in Odoo
+    And I assign driver "Maria Rusu" via UI
+    Then vehicle "MD-DRV-011" should have driver "Maria Rusu" in Odoo

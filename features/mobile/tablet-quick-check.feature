@@ -3,8 +3,8 @@ Feature: Tablet Device Quick Check
   Quick validation of tablet testing steps on existing pages
 
   Background:
-    Given Odoo is accessible at "http://localhost:8069"
-    And I login with username "admin" and password "admin"
+    Given Odoo is accessible
+    And I am logged in as admin
 
   @galaxy-tab
   Scenario: Galaxy Tab viewport and touch targets on Vehicles page

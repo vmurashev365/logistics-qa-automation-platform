@@ -5,8 +5,8 @@ Feature: Tablet BOL Upload
   So that I can digitize paperwork while on the road
 
   Background:
-    Given Odoo is accessible at "http://localhost:8069"
-    And I login with username "admin" and password "admin"
+    Given Odoo is accessible
+    And I am logged in as admin
 
   # ========================================
   # BOL Photo Upload Scenarios

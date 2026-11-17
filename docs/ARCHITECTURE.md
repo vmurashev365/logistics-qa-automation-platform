@@ -155,7 +155,7 @@ Then I should see "License Plate" text
 **Пример:**
 
 ```gherkin
-Given I login with username "admin" and password "admin"
+Given I am logged in as admin
 When I create new vehicle with license plate "MD-TEST-001"
 ```
 
@@ -206,8 +206,8 @@ Feature: Fleet Management Smoke Test
   So that I can track the company fleet
 
   Background:
-    Given Odoo is accessible at "http://localhost:8069"
-    And I login with username "admin" and password "admin"
+    Given Odoo is accessible
+    And I am logged in as admin
 
   @critical @smoke-001
   Scenario: Access Vehicles page

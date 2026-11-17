@@ -37,7 +37,7 @@ Navigate between pages and verify URLs.
 
 | Step Pattern                         | Example                                               | Description                                     |
 | ------------------------------------ | ----------------------------------------------------- | ----------------------------------------------- |
-| `Given Odoo is accessible at {url}`  | `Given Odoo is accessible at "http://localhost:8069"` | Verifies Odoo is running at specified URL       |
+| `Given Odoo is accessible`           | `Given Odoo is accessible`                            | Opens the configured Odoo (`BASE_URL`)          |
 | `When I navigate to {pageKey} page`  | `When I navigate to "vehicles" page`                  | Navigates to a specific page using pageKey      |
 | `Then I should be on {pageKey} page` | `Then I should be on "vehicles" page`                 | Verifies current page URL matches expected page |
 | `When I go to {url}`                 | `When I go to "/web#model=fleet.vehicle"`             | Navigates to exact URL path                     |
@@ -53,8 +53,7 @@ Handle login and logout workflows.
 
 | Step Pattern                                                 | Example                                                    | Description                                |
 | ------------------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------ |
-| `Given I login with username {string} and password {string}` | `Given I login with username "admin" and password "admin"` | Logs into Odoo with credentials            |
-| `Given I am logged in as admin`                              | `Given I am logged in as admin`                            | Quick login with default admin credentials |
+| `Given I am logged in as admin`                              | `Given I am logged in as admin`                            | Login as ODOO_USERNAME / ODOO_PASSWORD     |
 | `When I logout`                                              | `When I logout`                                            | Logs out of current session                |
 
 ---
@@ -175,7 +174,7 @@ Verify data persistence in PostgreSQL database.
 ```gherkin
 @smoke @vehicle-creation
 Scenario: Create vehicle with license plate only
-  Given Odoo is accessible at "http://localhost:8069"
+  Given Odoo is accessible
   And I am logged in as admin
   When I navigate to "vehicles" page
   And I click "create" button
@@ -190,7 +189,7 @@ Scenario: Create vehicle with license plate only
 ```gherkin
 @vehicle-creation @complete
 Scenario: Create vehicle with all details
-  Given Odoo is accessible at "http://localhost:8069"
+  Given Odoo is accessible
   And I am logged in as admin
   When I navigate to "vehicles" page
   And I click "create" button
@@ -211,7 +210,7 @@ Scenario: Create vehicle with all details
 ```gherkin
 @vehicle-search
 Scenario: Search for existing vehicle
-  Given Odoo is accessible at "http://localhost:8069"
+  Given Odoo is accessible
   And I am logged in as admin
   When I navigate to "vehicles" page
   And I fill "search" with "MD-FLEET-100"
@@ -225,7 +224,7 @@ Scenario: Search for existing vehicle
 ```gherkin
 @vehicle-discard
 Scenario: Cancel vehicle creation without saving
-  Given Odoo is accessible at "http://localhost:8069"
+  Given Odoo is accessible
   And I am logged in as admin
   When I navigate to "vehicles" page
   And I click "create" button
@@ -254,7 +253,7 @@ Scenario: Create vehicle using Odoo API
 ```gherkin
 @driver-assignment
 Scenario: Assign driver to vehicle
-  Given Odoo is accessible at "http://localhost:8069"
+  Given Odoo is accessible
   And I am logged in as admin
   And I navigate to "vehicles" page
   When I click on "MD-FLEET-100"
@@ -270,7 +269,7 @@ Scenario: Assign driver to vehicle
 ```gherkin
 @negative @validation
 Scenario: Cannot save vehicle without license plate
-  Given Odoo is accessible at "http://localhost:8069"
+  Given Odoo is accessible
   And I am logged in as admin
   When I navigate to "vehicles" page
   And I click "create" button

@@ -5,8 +5,8 @@ Feature: Fleet Management Smoke Test
   So that I can track the company fleet
 
   Background:
-    Given Odoo is accessible at "http://localhost:8069"
-    And I login with username "admin" and password "admin"
+    Given Odoo is accessible
+    And I am logged in as admin
 
   @critical @smoke-001
   Scenario: Access Vehicles page
@@ -23,8 +23,8 @@ Feature: Fleet Management Smoke Test
   Scenario: Fill vehicle license plate field
     When I navigate to "vehicles" page
     And I click "create" button
-    And I fill "licensePlate" with "MD-TEST-001"
-    Then "licensePlate" field should contain "MD-TEST-001"
+    And I fill "licensePlate" with "MD-SMOKE-003"
+    Then "licensePlate" field should contain "MD-SMOKE-003"
 
   @smoke-004
   Scenario: Discard vehicle creation

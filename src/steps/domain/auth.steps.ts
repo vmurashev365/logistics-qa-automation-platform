@@ -8,15 +8,33 @@ import { Given, When, Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 import { CustomWorld } from '../../support/custom-world';
 import { UI_MAP } from '../../ui-map';
+import { getEnvConfig } from '../../support/env';
+
+/**
+ * The password of `login`: the administrator's comes from ODOO_PASSWORD, any other user's from
+ * USER_<LOGIN>_PASSWORD (e.g. USER_DISPATCH_PASSWORD). A missing password is an error, never a
+ * guessed default.
+ */
+export function passwordFor(login: string): string {
+  const config = getEnvConfig();
+  if (login === config.odooUsername) {
+    return config.odooPassword;
+  }
+  const envKey = `USER_${login.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_PASSWORD`;
+  const password = process.env[envKey]?.trim();
+  if (!password) {
+    throw new Error(`No password for Odoo user "${login}": set ${envKey}`);
+  }
+  return password;
+}
 
 /**
  * Given I am logged in as admin
- * Logs in with default admin credentials
+ * Logs in as the administrator configured in ODOO_USERNAME / ODOO_PASSWORD
  */
 Given('I am logged in as admin', { timeout: 30000 }, async function (this: CustomWorld) {
   const baseUrl = this.getTestData<string>('baseUrl') || this.getBaseUrl();
-  const username = process.env.ODOO_USERNAME || 'admin';
-  const password = process.env.ODOO_PASSWORD || 'admin';
+  const { odooUsername: username, odooPassword: password } = getEnvConfig();
 
   // Check if already logged in by looking for the navbar
   const isLoggedIn = await this.page.locator('.o_main_navbar').isVisible().catch(() => false);
@@ -58,9 +76,7 @@ Given('I am logged in as admin', { timeout: 30000 }, async function (this: Custo
 Given('I am logged in as {string}', { timeout: 30000 }, async function (this: CustomWorld, username: string) {
   const baseUrl = this.getTestData<string>('baseUrl') || this.getBaseUrl();
   
-  // Get password from environment (format: USER_<username>_PASSWORD)
-  const envKey = `USER_${username.toUpperCase()}_PASSWORD`;
-  const password = process.env[envKey] || 'admin';
+  const password = passwordFor(username);
 
   // Check if already logged in as this user  
   const isLoggedIn = await this.loginPage.isLoggedIn().catch(() => false);

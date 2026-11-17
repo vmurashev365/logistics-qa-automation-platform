@@ -667,7 +667,7 @@ Feature: Vehicle Management
   So that I can manage my fleet
 
   Scenario: View the vehicles list
-    Given Odoo is accessible at "http://localhost:8069"
+    Given Odoo is accessible
     When I navigate to "Vehicles" page
     Then I should see "Vehicles" text
 ```
@@ -687,7 +687,7 @@ Feature: Vehicle Management
 
 **Navigation:**
 
-- `Given Odoo is accessible at "http://localhost:8069"` — verify system is up
+- `Given Odoo is accessible` — open the configured Odoo (`BASE_URL`) and verify it is up
 - `When I navigate to "Vehicles" page` — go to a page
 - `When I click "Create" button` — click a button
 
@@ -840,7 +840,7 @@ docker-compose down -v
 | `ODOO_PASSWORD`         | `admin`                 | Odoo password for UI/API                     |
 | `ODOO_DATABASE`         | `logistics_qa_db`       | Odoo database name                           |
 | `HEADLESS`              | `false`                 | Run browser headless                         |
-| `BROWSER`               | `chromium`              | Browser type                                 |
+| `BROWSER`               | `chromium`              | `chromium`, `firefox` or `webkit`            |
 | `TIMEOUT`               | `30000`                 | Default timeout (ms)                         |
 | `SLOW_MO`               | `0`                     | Slow down actions (ms)                       |
 | `VIEWPORT_WIDTH`        | `1920`                  | Browser viewport width                       |
@@ -856,8 +856,13 @@ docker-compose down -v
 | `POSTGRES_DATABASE`     | `logistics_qa_db`       | PostgreSQL database                          |
 | `CTI_MODE`              | `mock`                  | CTI mode (`mock`/`disabled`)                 |
 | `OFFLINE_MODE`          | `mock`                  | Offline sync mode (`mock`/`disabled`)        |
-| `LOG_LEVEL`             | `info`                  | Log level (`debug`/`info`/`warn`/`error`)    |
-| `VERBOSE`               | `false`                 | Enable verbose logging                       |
+| `API_BASE_URL`          | `BASE_URL`              | REST services under test (finance, loads)    |
+| `ODOO_CONTAINER`        | `logistics-qa-odoo`     | Odoo container, read by @security-016        |
+| `ODOO_LOG_FILE`         | odoo.conf `logfile`     | Log file in the container; empty: logs       |
+
+Every value is checked when a run starts: a value that cannot be read (`HEADLESS=maybe`,
+`TIMEOUT=30s`, `BROWSER=chrome`) stops the run with a message naming the variable. Scenarios
+signing in as another user by name need `USER_<LOGIN>_PASSWORD`; there is no default password.
 
 ### ENV Contract (Integration Modules)
 
@@ -865,14 +870,11 @@ These environment variables are required by the integration modules added under 
 
 | Variable | Required By | Notes |
 | --- | --- | --- |
-| `API_BASE_URL` | Financial Compliance, Offline Sync | Base URL for REST services under test |
+| `API_BASE_URL` | Financial Compliance, Offline Sync | Base URL for REST services under test (default `BASE_URL`) |
 | `API_AUTH_TOKEN` | Financial Compliance, Offline Sync | Bearer token value (without the `Bearer` prefix) |
 | `FINANCE_SALARY_ENDPOINT` | Financial Compliance | Salary endpoint path or absolute URL |
 | `FINANCE_IFTA_ENDPOINT` | Financial Compliance | IFTA endpoint path or absolute URL |
 | `LOAD_STATUS_ENDPOINT` | Offline Sync | Polling endpoint for sync status (path or absolute URL) |
-| `ODOO_BASE_URL` | Offline Sync, CTI Screen Pop | Odoo web base URL for UI login |
-| `ODOO_USER` | Offline Sync, CTI Screen Pop | Odoo UI username |
-| `ODOO_PASS` | Offline Sync, CTI Screen Pop | Odoo UI password |
 | `CTI_WS_PATTERN` | CTI Screen Pop | WebSocket URL match pattern used by `page.routeWebSocket()` (supports `*` wildcards or `/regex/flags`) |
 | `DEMO_MODE` | HOS / ELD | Enable demo-only behavior (default `true`) |
 | `TIMEZONE` | HOS / ELD | IANA timezone name (default `UTC`) |
@@ -905,7 +907,7 @@ Feature: My Feature
   So that I achieve a goal
 
   Scenario: My scenario
-    Given Odoo is accessible at "http://localhost:8069"
+    Given Odoo is accessible
     When I navigate to "Vehicles" page
     Then I should see "Vehicles" text
 ```
@@ -914,7 +916,7 @@ Feature: My Feature
 
 **Navigation:**
 
-- `Given Odoo is accessible at {string}`
+- `Given Odoo is accessible`
 - `When I navigate to {string} page`
 - `When I click {string} link`
 - `When I refresh the page`

@@ -44,7 +44,7 @@ Feature: Security and Access Control
 
   @authorization @security-005
   Scenario: Administrator can open the fleet vehicles list
-    Given I am logged in as "admin"
+    Given I am logged in as admin
     When I navigate to "vehicles" page
     Then the vehicles list should be shown
     And page title should contain "Vehicles"
@@ -62,7 +62,7 @@ Feature: Security and Access Control
 
   @session @security-007
   Scenario: Session expires after logout
-    Given I am logged in as "admin"
+    Given I am logged in as admin
     When I navigate to "vehicles" page
     And I logout
     Then I should be on "login" page
@@ -81,7 +81,7 @@ Feature: Security and Access Control
 
   @input-validation @security-009
   Scenario: Script in a license plate is stored as text and never run
-    Given I am logged in as "admin"
+    Given I am logged in as admin
     And I navigate to "vehicles" page
     And the page is watched for script execution
     When I click "create" button
@@ -95,7 +95,7 @@ Feature: Security and Access Control
 
   @input-validation @security-010
   Scenario: SQL text in the vehicle search is treated as a search term
-    Given I am logged in as "admin"
+    Given I am logged in as admin
     And I navigate to "vehicles" page
     When I search for "'; DROP TABLE fleet_vehicle; --"
     Then the vehicles search for "'; DROP TABLE fleet_vehicle; --" should find no vehicles
@@ -113,12 +113,12 @@ Feature: Security and Access Control
   Scenario: Repeated failed logins lock out further attempts for a while
     Given Odoo is configured to lock out logins from one address after 3 failed attempts for 10 seconds
     When I attempt to login with invalid credentials 3 times
-    And I login with credentials "admin" and "admin"
+    And I try to sign in with the administrator credentials
     Then the login page should say "Too many login failures, please wait a bit before trying again."
     And I should not be signed in
     When the login lockout period has passed
-    And I login with credentials "admin" and "admin"
-    Then I should be signed in as "admin"
+    And I try to sign in with the administrator credentials
+    Then I should be signed in as the administrator
 
   # ============================================
   # API SECURITY TESTS
@@ -154,7 +154,7 @@ Feature: Security and Access Control
 
   @audit @security-015
   Scenario: Vehicle creation is recorded in the vehicle history
-    Given I am logged in as "admin"
+    Given I am logged in as admin
     And I navigate to "vehicles" page
     When I create a vehicle with plate "MD-AUDIT-001"
     Then the history of vehicle "MD-AUDIT-001" should record "Vehicle created" by the signed-in user during this scenario

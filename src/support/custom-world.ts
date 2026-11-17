@@ -20,29 +20,20 @@ import { FleetVehicleModel } from '../api/models/fleet/FleetVehicleModel';
 import { FleetFuelLogModel } from '../api/models/fleet/FleetFuelLogModel';
 import { FleetInspectionModel } from '../api/models/fleet/FleetInspectionModel';
 import { FleetServiceModel } from '../api/models/fleet/FleetServiceModel';
-
-/**
- * World parameters passed from cucumber.config.ts
- */
-export interface WorldParameters {
-  baseUrl: string;
-  headless: boolean;
-  slowMo: number;
-  timeout: number;
-}
+import { getEnvConfig } from './env';
 
 /**
  * Custom World class extending Cucumber's World
  * Contains browser instances, page objects, and test data storage
+ *
+ * Configuration comes from support/env.ts only (no Cucumber world parameters): cucumber.js is
+ * evaluated before .env is loaded, so values it computed could disagree with the rest.
  */
-export class CustomWorld extends World<WorldParameters> {
+export class CustomWorld extends World {
   // Playwright instances
   browser!: Browser;
   context!: BrowserContext;
   page!: Page;
-
-  // World parameters (from cucumber.config.ts)
-  declare parameters: WorldParameters;
 
   // Page Objects - Fleet Module
   vehiclesListPage!: VehiclesListPage;
@@ -75,7 +66,7 @@ export class CustomWorld extends World<WorldParameters> {
   scenarioName: string = '';
   featureName: string = '';
 
-  constructor(options: IWorldOptions<WorldParameters>) {
+  constructor(options: IWorldOptions) {
     super(options);
   }
 
@@ -102,10 +93,10 @@ export class CustomWorld extends World<WorldParameters> {
   }
 
   /**
-   * Get base URL from parameters or environment
+   * Odoo's base URL (BASE_URL), the same value the API clients use.
    */
   getBaseUrl(): string {
-    return this.parameters.baseUrl || process.env.BASE_URL || 'http://localhost:8069';
+    return getEnvConfig().baseUrl;
   }
 
   /**
@@ -154,6 +145,29 @@ export class CustomWorld extends World<WorldParameters> {
         console.log(`⚠️ Cleanup failed (${cleanup.label}): ${error}`);
       }
     }
+  }
+
+  /**
+   * Partner ids named `name`, to pass to trackNewPartners before a step that may create one.
+   */
+  async partnerIdsNamed(name: string): Promise<number[]> {
+    return this.odooApi.search('res.partner', [['name', '=', name]]);
+  }
+
+  /**
+   * Delete, after the scenario, the partners named `name` that did not exist before it
+   * (`existingIds`). Runs after the scenario's vehicles are deleted, whose driver history
+   * references these partners.
+   */
+  trackNewPartners(name: string, existingIds: number[]): void {
+    this.addCleanup(`delete partner "${name}"`, async () => {
+      const ids = await this.odooApi.search('res.partner', [['name', '=', name]]);
+      const created = ids.filter((id) => !existingIds.includes(id));
+      if (created.length > 0) {
+        await this.odooApi.unlink('res.partner', created);
+        console.log(`🗑️ Cleanup: deleted partner "${name}"`);
+      }
+    });
   }
 
   /**

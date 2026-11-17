@@ -5,25 +5,25 @@ Feature: Vehicle Management
   So that every vehicle of the company fleet has a record
 
   Background:
-    Given Odoo is accessible at "http://localhost:8069"
+    Given Odoo is accessible
     And I am logged in as admin
     And I navigate to "vehicles" page
 
   @smoke @critical
   Scenario: A vehicle with a license plate and a model is saved
     When I click "create" button
-    And I fill "licensePlate" with "MD-TEST-001"
+    And I fill "licensePlate" with "MD-WEB-001"
     And I choose vehicle model "Audi/A1"
     And I click "save" button
-    Then vehicle "MD-TEST-001" should be saved in Odoo with model "Audi/A1"
+    Then vehicle "MD-WEB-001" should be saved in Odoo with model "Audi/A1"
 
   @crud
   Scenario: A vehicle without a model is not saved
     When I click "create" button
-    And I fill "licensePlate" with "MD-TEST-002"
+    And I fill "licensePlate" with "MD-WEB-002"
     And I click "save" button
     Then Odoo should refuse to save the vehicle because "Model" is missing
-    And no vehicle "MD-TEST-002" should exist in Odoo
+    And no vehicle "MD-WEB-002" should exist in Odoo
 
   @smoke
   Scenario: Navigate to vehicles list

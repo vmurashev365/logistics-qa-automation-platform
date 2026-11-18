@@ -52,19 +52,9 @@ Logistics QA Automation Platform построен на основе **много
 - `messages.ts` - селекторы сообщений
 - `tablet.ts` - специфичные селекторы для планшетов
 
-**Преимущество:** Когда UI меняется, вы правите селекторы только в одном месте!
-
-**Пример:**
-
-```typescript
-export const BUTTONS = {
-  CREATE: '[data-testid="create-button"]',
-  SAVE: '.o_form_button_save',
-  CANCEL: '.o_form_button_cancel'
-};
-```
-
----
+Ключи полей и кнопок связывают шаги с подписями в Odoo. Например, `UI_MAP.fields.licensePlate` возвращает
+`License Plate`, а `UI_MAP.buttons.create` — `New`. Реализация также использует локаторы в объектах страниц и шагах.
+[UI-MAP](../src/ui-map/index.ts)
 
 ### **Уровень 4: Page Objects** (`src/pages/`)
 
@@ -78,17 +68,8 @@ Page Object Model - классы, представляющие страницы 
 
 **Назначение:** Страницы используют UI-MAP для поиска элементов и предоставляют методы для взаимодействия.
 
-**Пример:**
-
-```typescript
-class VehiclesPage extends OdooBasePage {
-  async clickCreateButton() {
-    await this.page.locator(BUTTONS.CREATE).click();
-  }
-}
-```
-
----
+Например, [VehiclesListPage](../src/pages/web/fleet/VehiclesListPage.ts) открывает список и форму создания,
+а [VehicleFormPage](../src/pages/web/fleet/VehicleFormPage.ts) работает с полями и сохранением записи.
 
 ### **Уровень 5: API слой** (`src/api/`)
 
@@ -156,7 +137,7 @@ Then I should see "License Plate" text
 
 ```gherkin
 Given I am logged in as admin
-When I create new vehicle with license plate "MD-TEST-001"
+Given vehicle "MD-DRV-011" exists in the system
 ```
 
 #### **7.3 Composite Steps** (`src/steps/composite/`)
@@ -170,10 +151,10 @@ When I create new vehicle with license plate "MD-TEST-001"
 **Пример:**
 
 ```gherkin
-When I complete vehicle inspection workflow for "MD-TEST-001"
+When I assign driver "Maria Rusu" to vehicle "MD-DRV-011"
 ```
 
-(внутри: логин → навигация → создание → заполнение → сохранение)
+Для этого шага требуется открытая сессия и существующая машина.
 
 ---
 
@@ -212,7 +193,7 @@ Feature: Fleet Management Smoke Test
   @critical @smoke-001
   Scenario: Access Vehicles page
     When I navigate to "vehicles" page
-    Then I should see "Vehicles" text
+    Then the vehicles list should be shown
 ```
 
 ---
@@ -248,17 +229,12 @@ Allure Report
 
 ---
 
-## 🎯 Ключевые преимущества архитектуры
+## Изоляция сценариев
 
-✅ **Переиспользование кода** - atomic шаги используются везде  
-✅ **Читаемость** - бизнес-пользователи понимают Feature файлы  
-✅ **Поддержка** - изменение селектора требует правки только UI-MAP  
-✅ **Масштабируемость** - легко добавлять новые модули  
-✅ **Многоуровневое тестирование** - UI, API, DB, Security, Performance  
-✅ **Изоляция изменений** - изменение в одном уровне не влияет на другие  
-✅ **Параллельное выполнение** - тесты независимы друг от друга
-
----
+Cucumber создаёт контекст браузера и World для каждого сценария. `test:all` использует два воркера.
+Планировщик запускает сценарий с тегом `@serial` отдельно от других сценариев того же прогона.
+Хуки удаляют зарегистрированные тестовые записи и выполняют отложенную очистку.
+[Хуки](../src/support/hooks.ts) · [Планировщик](../src/support/parallel.ts)
 
 ## 📋 Конфигурационные файлы
 
@@ -266,7 +242,7 @@ Allure Report
 
 - `package.json` - npm скрипты, зависимости
 - `cucumber.js` - конфигурация Cucumber
-- `playwright.config.ts` - конфигурация Playwright
+- `playwright.config.ts` - конфигурация отдельного Playwright Test runner и размеры экранов планшетов
 - `tsconfig.json` - настройки TypeScript
 - `docker-compose.yml` - локальное окружение Odoo
 
@@ -285,6 +261,6 @@ Allure Report
 
 ## 📚 Дополнительная документация
 
-- [Руководство для нетехнических специалистов](./ARCHITECTURE_NON_TECHNICAL.md)
+- [Руководство для нетехнических специалистов](../README.md)
 - [Примеры тестов](../features/)
-- [API документация](./API.md)
+- [API документация](./API_TESTING.md)

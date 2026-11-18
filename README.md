@@ -1,382 +1,79 @@
 # Logistics QA Automation Platform
 
-[![CI — Smoke Tests](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-20%2B-green.svg)](https://nodejs.org/)
+This portfolio project tests logistics workflows against Odoo 17 Community and PostgreSQL 15.
+Cucumber runs the Gherkin scenarios. Playwright drives the browser, Odoo JSON-RPC manages Fleet records,
+and PostgreSQL checks verify stored data. The repository also contains k6 scripts and an optional
+Playwright Test runner for the specs in `tests/`. To run its Chromium project, use `npx playwright test --project chromium`.
 
-A time-boxed training build demonstrating a maintainable QA automation platform
-using a local Dockerized Odoo Community testbed. Covers web UI, REST/JSON-RPC API,
-database, integration, mobile, security, and performance testing for logistics
-workflow applications.
+The project demonstrates automation techniques for logistics workflows. Formal compliance certification is outside
+its scope. See [setup](#quick-start), [suite selection](#running-tests), [reports](#reports-and-ci) and the
+[step library](docs/STEP_LIBRARY.md).
 
----
+## Quick start
 
-> **Portfolio Disclaimer**
->
-> This repository is a **training / portfolio project** built as a time-boxed
-> framework challenge. It is intended to demonstrate QA framework architecture,
-> engineering approach, and multi-suite coverage — **not** associated with any
-> client release or production system.
+Install Node.js 20 or later and start Docker. From the repository root in PowerShell, run the following commands.
 
----
-
-## ✨ Highlights
-
-- 🏗 **3-Layer BDD Architecture** -
-  Atomic → Domain → Composite steps for maximum reusability (see
-  [docs/BDD_ARCHITECTURE.md](docs/BDD_ARCHITECTURE.md))
-- 🗺 **UI-MAP Pattern** - Decoupled selectors for maintainability and resilience
-- 🔄 **Full-Stack Testing** - Web UI, REST/JSON-RPC APIs, Database, Integration tests
-- 📱 **Mobile-Ready** - Appium architecture for Android/iOS driver app testing
-- 🔐 **Security Testing** - Access control, authentication, GDPR compliance validation
-- ⚡ **Performance Testing** - k6 integration for load and stress testing
-- 📚 **50+ Reusable Steps** - Product Owners can write tests without coding
-- 🐳 **Docker-First** - Containerized Odoo environment for consistent testing
-- 📊 **Rich Reporting** - Cucumber HTML reports, Allure reports, screenshots on failure
-- 🚀 **CI/CD Ready** - GitHub Actions workflow with nightly smoke regression
-
----
-
-## 🔌 Adapter-first Architecture (Demo-ready)
-
-- **Odoo adapter included** (JSON-RPC) for data setup and verification.
-- **ELD provider is pluggable**: mock provider for demos, API provider stub for real integrations.
-- **Domain logic is deterministic** (VirtualClock + HosCalculator) for instant long-duration simulations.
-
----
-
-## ✅ Compliance Coverage Matrix
-
-| Module | Coverage | Notes |
-| --- | --- | --- |
-| HOS / ELD | ✅ Deterministic HOS engine, mock ELD | Demo mode supported |
-| IFTA / Finance | ✅ REST API compliance | Calculator parity checks |
-| Fleet | ✅ Web UI + API + DB | Vehicles, fuel, inspections |
-| Inspections | ✅ Web UI | Fleet inspection flows |
-| Offline Sync | ✅ Mobile + API | CouchDB mock |
-| CTI | ✅ Web UI | Screen pop + WebSocket |
-
----
-
-## ⚡ Quick Adaptation Guide
-
-1. **Replace the Odoo adapter** with your REST/GraphQL adapter.
-2. **Keep HosCalculator + EldProvider unchanged** to retain deterministic compliance logic.
-3. Update `.env` contract values for your environments.
-
----
-
-## 💰 ROI (Typical Outcomes)
-
-- 60–80% reduction in manual compliance regression time.
-- Faster onboarding for new fleets with reusable test suites.
-- Reduced defect leakage in high-regulatory modules.
-
----
-
-## ⚠️ Disclaimer
-
-This framework provides test automation support and **does not constitute legal certification**.
-This is a portfolio / training project and is not associated with any specific company or client.
-
----
-
-## 📖 Table of Contents
-
-- [What is this?](#-what-is-this)
-- [Quick Start (Step by Step)](#-quick-start-step-by-step)
-- [Running Tests](#-running-tests)
-- [Viewing Reports](#-viewing-reports)
-- [Project Structure](#-project-structure)
-- [Writing Tests](#-writing-tests)
-- [Troubleshooting](#-troubleshooting)
-- [Command Reference](#-command-reference-complete-list)
-
----
-
-## 🎯 What is this?
-
-This framework demonstrates automated validation patterns for a logistics workflow platform:
-
-- ✅ **Web Interface** — clicks, form filling, display verification
-- ✅ **API** — server response validation without using the UI
-- ✅ **Database** — verifies data is saved correctly
-- ✅ **Security** — checks user access permissions
-- ✅ **Performance** — validates system speed under load
-- ✅ **Tablet Devices** — testing on Galaxy Tab and iPad
-
-**Key Benefit:** Tests are written in plain English (Gherkin language), so business users can read
-and even write tests without programming knowledge!
-
----
-
-## 🚀 Quick Start (Step by Step)
-
-## ⚡ 5-minute Demo
-
-Goal: run a quick smoke suite and open an Allure report.
-
-The local demo runs in headed mode by default so the browser flow is visible.
-
-```bash
-npm install
+```powershell
+npm ci
 npx playwright install chromium
-copy .env.example .env
-
-# Optional (if you want a local Odoo + Postgres to test against)
-npm run docker:start
-
-# Run smoke
-npm run test:smoke
-
-# Generate + open Allure report (with trend history)
-npm run report:allure:trend:open
-```
-
-Notes:
-
-- Cucumber (`cucumber-js`) is the primary test runner in this repo.
-- Playwright is used as the browser automation engine inside Cucumber steps.
-- The Playwright Test runner (`npx playwright test`) is optional and not used by default.
-
-### Step 1: Install Required Software
-
-Before you begin, install these programs on your computer:
-
-| Program | Why You Need It | How to Install |
-| ------- | --------------- | -------------- |
-| **Node.js 20+** | Runs the test framework | [Download from nodejs.org](https://nodejs.org/) — choose the LTS version |
-| **Docker Desktop** | Runs the Odoo test environment | [Download from docker.com](https://www.docker.com/products/docker-desktop/) |
-| **Git** | Downloads the project code | [Download from git-scm.com](https://git-scm.com/) |
-
-> 💡 **Tip:** After installing Docker Desktop, make sure it's running (the whale icon in your system tray should be active).
-
-### Step 2: Download the Project
-
-Open **PowerShell** (or **Terminal** on Mac) and run these commands:
-
-```bash
-# Navigate to where you want to store the project
-cd C:\Projects
-
-# Download the project
-git clone https://github.com/<your-username>/logistics-qa-automation-platform.git
-
-# Go into the project folder
-cd logistics-qa-automation-platform
-```
-
-> 💡 **How to open PowerShell:** Press `Win + X` and select "Windows PowerShell" or "Terminal".
-
-### Step 3: Install Dependencies
-
-```bash
-# Install project libraries (takes 1-2 minutes)
-npm install
-
-# Install the browser for testing
-npx playwright install chromium
-
-# Copy environment configuration (edit if needed)
-copy .env.example .env   # Windows
-# cp .env.example .env   # Mac/Linux
-```
-
-> ⏳ The first run may take several minutes — wait for it to complete.
->
-> 💡 **Tip:** Review `.env` file and adjust settings if your Odoo runs on a different URL or port.
-
-### Step 4: Start the Odoo Test Environment
-
-```bash
-# Start Odoo and PostgreSQL in Docker
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
 npm run docker:start
 ```
 
-**Wait for startup!** The first time, Odoo initialization may take **1-2 minutes**.
-
-Verify it's ready:
-
-1. Open your browser and go to <http://localhost:8069>
-2. You should see the Odoo login page
-3. Username: `admin`, Password: `admin`
-
-> ⚠️ **If the page doesn't load:** Wait another minute and refresh. Check status with `docker-compose logs -f odoo`.
-
-### Step 5: Run Your First Test
+In Bash, use `cp -n .env.example .env` to create the local configuration. The Docker npm scripts use
+`docker-compose`. For installations that expose `docker compose`, start the stack with `docker compose up -d`.
+Wait for [Odoo health](http://localhost:8069/web/health) to return success. The local Fleet database is
+`logistics_qa_db`, with `admin` / `admin` as the initial Odoo credentials. When targeting another instance,
+set the URL and credentials for a dedicated test database. Smoke scenarios create and remove vehicles.
 
 ```bash
-# Run quick smoke tests
 npm run test:smoke
 ```
 
-You'll see test progress and results:
+To run just **Access Vehicles page**, use `npm run test:smoke -- --tags @smoke-001`.
+To inspect that selection without running the steps, append `--dry-run`. A positional feature path is added to the
+glob in `cucumber.js` and can select scenarios in other files. The [runbook](docs/RUNBOOK.md) covers troubleshooting.
 
-- ✅ **Passed** — test completed successfully
-- ❌ **Failed** — test found an issue
-- Each scenario name and every Gherkin step are printed to the terminal with execution time.
+## Running tests
 
----
-
-## 🧪 Running Tests
-
-### Runner (important)
-
-- **Primary runner:** Cucumber (`cucumber-js`) using config in `cucumber.js`.
-- **Playwright usage:** Steps/hooks use the `playwright` library to drive browsers.
-- **`@playwright/test` usage:** Used for Playwright's `expect` assertions inside Cucumber step definitions.
-- **Playwright Test runner:** Optional only; see `playwright.config.ts`.
-
-### Common Commands
-
-| What to Test | Command | Duration |
-| --- | --- | --- |
-| Quick check (smoke) | `npm run test:smoke` | ~2 min |
-| API only | `npm run test:api` | ~3 min |
-| Web UI only | `npm run test:web` | ~5 min |
-| Integration tests | `npm run test:integration` | ~5 min |
-| All tests | `npm run test:all` | ~15 min |
-| Tablet tests | `npm run test:tablet` | ~3 min |
-
-### Suites & tags
-
-These suites map directly to `package.json` scripts and Cucumber tag expressions.
-
-| Suite | Primary tags (present in `features/**/*.feature`) | Command |
-| --- | --- | --- |
-| Smoke | `@smoke` (excludes `@api`) | `npm run test:smoke` |
-| API | `@api` (excludes `@module_*` by default) | `npm run test:api` |
-| API smoke | `@api-smoke` | `npm run test:api:smoke` |
-| Web UI | `@web` (scoped to `features/web`) | `npm run test:web` |
-| Integration | `@integration` (excludes `@module_*`) | `npm run test:integration` |
-| Security | `@security` | `npm run test:security` |
-| Accessibility | `@accessibility` | `npm run test:accessibility` |
-| Tablet | `@tablet` (scoped to `features/mobile`) | `npm run test:tablet` |
-| Tablet offline | `@tablet and @offline` | `npm run test:tablet:offline` |
-
-Common secondary tags you can use to slice scenarios:
-
-- `@critical`, `@quick-check`, `@galaxy-tab`, `@ipad-mini`, `@offline`
-
-Two tags change how a scenario runs:
-
-- `@wip` — the scenario records a requirement that cannot be checked on this stack yet. Every
-  `npm run test:*` script excludes it; its unfinished step reports as pending, not failed.
-- `@serial` — the scenario changes something all others depend on (the login lockout scenario
-  locks out logins from this machine for a few seconds). In a parallel run it runs alone.
-
-Module tags (use these to run specific functional areas):
-
-- `@module_finance` (Financial Compliance)
-- `@module_offline_sync` (Offline Sync)
-- `@module_cti` (CTI Screen Pop)
-- `@module_loads` (Loads / BOL upload flows)
-
-Note: `npm run test:integration` excludes module-tagged scenarios by default.
-Run module suites directly when the required external env/config is available.
-
-Note: `npm run test:api` also excludes module-tagged scenarios by default.
-For example, finance compliance API tests require `API_BASE_URL` and related vars.
-Use the `test:module:*` scripts when the required external services and env vars are configured.
-
-### Running Specific Tests
-
-```bash
-# By scenario name
-npx cucumber-js --name "Access Vehicles page"
-
-# By tag
-npx cucumber-js --tags "@smoke"
-npx cucumber-js --tags "@critical"
-npx cucumber-js --tags "@tablet"
-```
-
-### Running Headless (optional)
-
-By default, local demo runs open a visible browser. To switch back to headless mode:
-
-**Windows (PowerShell):**
-
-```powershell
-$env:HEADLESS="true"; npm run test:smoke
-```
-
-**Mac/Linux:**
-
-```bash
-HEADLESS=true npm run test:smoke
-```
-
-### Terminal Step Logging
-
-By default, local demo runs print each scenario name and every Gherkin step with execution time.
-
-To disable step timing logs:
-
-**Windows (PowerShell):**
-
-```powershell
-$env:DEBUG_TIMING="false"; npm run test:smoke
-```
-
-**Mac/Linux:**
-
-```bash
-DEBUG_TIMING=false npm run test:smoke
-```
-
----
-
-## 📊 Viewing Reports
-
-### Cucumber HTML Report (Simple)
-
-After running tests, generate the report:
-
-```bash
-npm run report:cucumber
-```
-
-Open the file `reports/cucumber/index.html` in your browser.
-
-### Allure Report (Advanced, with Charts)
-
-```bash
-# Generate report first, then open it
-npm run report:allure
-npm run report:allure:open
-
-# Or use the combined command with history (recommended)
-npm run report:allure:trend:open
-```
-
-> 💡 The Allure report will open automatically in your browser.
-
----
-
-## 🤖 CI (GitHub Actions)
-
-The workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) provides:
-
-| Feature | Details |
+| Command | Scenarios selected and prerequisites |
 | --- | --- |
-| **Triggers** | `push` to main, `pull_request`, nightly schedule (03:30 UTC), manual `workflow_dispatch` |
-| **Environment** | Ubuntu + PostgreSQL service + Odoo 17 container (Docker) |
-| **Test command** | `npm run test:smoke` |
-| **Reports** | Cucumber HTML + Allure (with trend history) |
-| **Rerun** | Re-run any job from GitHub Actions UI or GitHub mobile app |
+| `npm run test:smoke` | Fleet browser and tablet quick checks. Excludes `@api`, `@module_loads` and `@wip`. |
+| `npm run test:api` / `npm run test:api:smoke` | Core Odoo Fleet API checks / the tagged API smoke check. |
+| `npm run test:web` | Fleet UI and CTI screen pop. Use `npm run test:web -- --tags @fleet` for Fleet alone. |
+| `npm run test:integration` | Fleet, UI/API/DB consistency and HOS/ELD. Excludes finance, offline-sync and CTI module tags. |
+| `npm run test:security` | Access control, sessions, input handling, export and audit. Some checks require PostgreSQL or access to the Odoo server log. Anonymization is tagged `@wip`. |
+| `npm run test:tablet` | Responsive tablet scenarios, including BOL and offline sync. For Fleet quick checks use `npm run test:tablet -- --tags @quick-check`. |
+| `npm run test:tablet:galaxy` / `npm run test:tablet:ipad` | Device-tagged browser scenarios, including BOL. |
+| `npm run test:tablet:offline` / `npm run test:accessibility` | Offline tablet workflows / touch-target and reachability checks on the Loads UI. |
+| `npm run test:module:finance` | Salary and IFTA checks require a REST service, configured endpoints and a bearer token. |
+| `npm run test:module:offline` | In-memory vehicle sync and browser load/POD sync. The browser scenario needs a Loads UI, status endpoint and token. |
+| `npm run test:module:cti` | In-memory call workflows and browser screen pop. The browser scenario needs a CTI-enabled UI and matching contact. |
+| `npm run test:visual` | Two Fleet snapshots. Create baselines before comparison. |
+| `npm run test:nightly` | Smoke, API and integration scripts in sequence. |
+| `npm run test:all` | All scenarios except `@wip`, including optional modules, using two workers. |
 
-Artifacts uploaded per run:
+The BOL and browser load/POD features contain undefined steps. This affects the full, tablet, offline and
+accessibility selections even when the external services are configured. The `@serial` tag gives a scenario exclusive
+execution within a parallel Cucumber run. See the [script definitions](package.json) for the exact tag expressions.
 
-- `allure-results/` — raw Allure data
-- `allure-report/` — generated Allure HTML report
-- `allure-history/` — trend history snapshot (30-day retention)
-- `cucumber-report/` — Cucumber HTML report
-- `failure-screenshots/` — captured on failure only
+## Reports and CI
 
-> **Manual trigger:** Open Actions → *CI — Smoke Tests & Reports* → *Run workflow* (works from GitHub mobile app too).
+Cucumber writes `reports/cucumber/cucumber-report.html`, `reports/cucumber/cucumber.json` and `allure-results/`.
+Run `npm run report:cucumber` to generate `reports/cucumber/index.html` from JSON. With Java installed,
+`npm run report:allure:trend:open` generates and opens the Allure report and saves local trend history.
+Failure screenshots go to `reports/screenshots/` when enabled.
 
----
+The [GitHub Actions workflow](.github/workflows/ci.yml) runs `npm run test:smoke` in headless Chromium on pushes
+and pull requests targeting `main`, daily at 03:30 UTC, and on manual dispatch. CI uploads available Cucumber
+and Allure artifacts, including a history snapshot. Cross-run trends require a previous snapshot to be restored.
+The workflow currently only uploads it.
+
+## Test data
+
+`npm run db:seed` creates 10 vehicles and five driver contacts via Odoo JSON-RPC. Preview cleanup with
+`npm run db:clean -- --dry-run` before using `npm run db:clean`. The script matches plate prefixes and partner
+identifiers across the configured test database. See the [data strategy](docs/DATA_STRATEGY.md).
 
 ## 🖼️ Visual regression (POC)
 
@@ -396,46 +93,17 @@ $env:UPDATE_BASELINE="1"; npm run test:visual
 UPDATE_BASELINE=1 npm run test:visual
 ```
 
+After capture in PowerShell, run `Remove-Item Env:UPDATE_BASELINE` to return to comparison mode.
+
 Baselines are stored in `visual/baseline/`.
 
-1. Compare against baselines (default):
+2. Compare against baselines (default):
 
 ```bash
 npm run test:visual
 ```
 
-On mismatch, the run writes debug images to `reports/visual/*.actual.png` and `reports/visual/*.diff.png`.
-
----
-
-## 🧫 Test Data Strategy (Community Odoo)
-
-This framework targets a **Community Odoo** environment and uses an
-**environment-driven, strategy-based** approach for test data.
-
-- Tests read credentials/URLs from environment variables (`.env` locally, CI secrets in pipelines).
-- Data setup/cleanup should be **selectable per environment** (local docker vs shared QA vs CI)
-  and **safe by default**.
-- The scripts `npm run db:seed` and `npm run db:clean` are placeholders for the strategy layer;
-  implementation and hardening come in Deliverable 2.
-
----
-
-## 🔐 Secrets & environment variables
-
-- Store secrets in environment variables (local `.env` file or CI secret store).
-- Do **not** commit `.env` files; use `.env.example` as the template.
-- CI should inject `ODOO_USERNAME`, `ODOO_PASSWORD`, DB credentials, etc. via repository/environment secrets.
-
-### Error Screenshots
-
-When a test fails, a screenshot is automatically saved in the folder:
-
-```text
-reports/screenshots/
-```
-
-This makes debugging much easier — you can see exactly what the screen looked like when the error occurred.
+A size mismatch saves the actual image. On a pixel mismatch, the run writes debug images to `reports/visual/*.actual.png` and `reports/visual/*.diff.png`.
 
 ---
 
@@ -486,7 +154,7 @@ logistics-qa-automation-platform/
 └── package.json              # 📦 Dependencies & scripts
 ```
 
-> 💡 **For test writers:** Focus on the `features/` folder — that's where all the test scenarios live!
+Start with the scenarios in [features](features) and use the [step library](docs/STEP_LIBRARY.md) for matching phrases.
 
 ---
 
@@ -494,7 +162,7 @@ logistics-qa-automation-platform/
 
 | Document | Who It's For | What's Inside |
 | --- | --- | --- |
-| **[STEP_LIBRARY.md](docs/STEP_LIBRARY.md)** | Product Owners, Business Analysts | List of all available test steps — write tests without coding! |
+| **[STEP_LIBRARY.md](docs/STEP_LIBRARY.md)** | Product Owners, Business Analysts | Registered steps and Fleet examples |
 | **[RUNBOOK.md](docs/RUNBOOK.md)** | Anyone | Troubleshooting guide and common fixes |
 | **[BDD_ARCHITECTURE.md](docs/BDD_ARCHITECTURE.md)** | QA Engineers, Developers | 3-Layer BDD architecture (Atomic → Domain → Composite) |
 | **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** | QA Engineers, Developers | Complete framework architecture (8-layer structure) |
@@ -505,235 +173,31 @@ logistics-qa-automation-platform/
 
 ---
 
-## 🚛 HOS/ELD Compliance Testing Architecture
+## HOS and ELD
 
-The framework includes a **deterministic Hours-of-Service (HOS) compliance engine** for testing FMCSA regulations
-without real-time waits or hardware ELD devices.
-
-### Key Components
-
-```text
-┌──────────────────────────────────────────────────┐
-│         HOS Compliance Test Layer                │
-│  (hos-compliance.steps.ts)                       │
-└────────────────────┬─────────────────────────────┘
-                     │
-         ┌───────────┴───────────┐
-         ↓                       ↓
-┌─────────────────┐    ┌──────────────────┐
-│  HosService     │    │  VirtualClock    │
-│  (src/helpers)  │    │  (src/helpers)   │
-└────────┬────────┘    └────────┬─────────┘
-         │                      │
-         ↓                      ↓
-┌──────────────────┐   ┌──────────────────┐
-│  HosCalculator   │   │  TimeSource      │
-│  (compliance     │   │  (interface)     │
-│   calculations)  │   │                  │
-└──────────────────┘   └──────────────────┘
-         │
-         ↓
-┌──────────────────┐
-│  EldProvider     │ ←──── Interface
-│  (src/api)       │
-└────────┬─────────┘
-         │
-    ┌────┴────┐
-    ↓         ↓
-┌─────────┐ ┌────────────┐
-│EldMock  │ │ EldApi     │
-│Client   │ │ Client     │
-│(demo)   │ │(real HW)   │
-└─────────┘ └────────────┘
-```
-
-### VirtualClock — Deterministic Time Control
-
-**Purpose:** Simulate hours/days instantly without `setTimeout` or real-time waits.
-
-**Key Features:**
-
-- ✅ Advance time by minutes: `clock.advanceMinutes(480)` → instantly jumps 8 hours ahead
-- ✅ No flaky tests from real time delays
-- ✅ Tests run in seconds instead of hours
-- ✅ TypeScript type-safe with proper interface narrowing
-
-**Example Usage:**
-
-```typescript
-// Create virtual clock starting at specific timestamp
-const clock = new VirtualClock(Date.parse('2026-01-01T08:00:00Z'));
-
-// Simulate 10 hours of driving instantly
-await eldMock.simulateDriving('DRIVER-001', 600); // 600 minutes
-
-// Clock automatically advances, HOS calculations update
-```
-
-**Recent Improvements:**
-
-- Fixed TypeScript type narrowing for `advanceMinutes()` method (eliminated unsafe casts)
-- Improved type safety with proper `TimeSource` interface checking
-
-### EldMockClient — In-Memory ELD Simulator
-
-**Purpose:** Mock Electronic Logging Device without hardware or cloud services.
-
-**Capabilities:**
-
-- Record duty status events (DRIVING, ON_DUTY, OFF_DUTY, SLEEPER_BERTH)
-- Simulate driving/rest periods with VirtualClock integration
-- Inject malfunctions for compliance testing
-- Generate DOT inspection reports (USB format)
-- Chronological validation (rejects out-of-order events)
-
-### HosCalculator — FMCSA Rules Engine
-
-**Purpose:** Pure calculation logic for Hours-of-Service compliance.
-
-**Implements:**
-
-- 11-hour driving limit
-- 14-hour on-duty limit
-- 70-hour/8-day limit
-- 34-hour restart rules
-- Break requirements
-
-**Benefits:**
-
-- ✅ Deterministic: same inputs = same outputs
-- ✅ No side effects or external dependencies
-- ✅ Easy to test and verify
-- ✅ Portable to any project
-
-### Testing HOS Compliance
-
-**Feature File Example:**
+Run `npm run test:integration -- --tags @hos` to exercise the simulated driving, duty, break and cycle rules.
+`VirtualClock` advances time, `EldMockClient` supplies duty events and `HosCalculator` evaluates the event history.
+Use `ELD_MODE=mock`. The API provider is a stub. See the [HOS scenarios](features/integration/hos_compliance.feature).
 
 ```gherkin
-@hos @compliance
-Scenario: Driver exceeds 11-hour driving limit
-  Given driver "D1" starts OFF_DUTY for 600 minutes
-  When driver "D1" starts DRIVING for 660 minutes
-  Then HOS service should report violation "DRIVING_LIMIT_EXCEEDED"
-  And remaining drive time should be 0 minutes
+Feature: HOS example
+  Scenario: Driving exceeds the 11-hour limit
+    Given demo HOS context for driver "D1" and vehicle "V1"
+    And driver "D1" starts OFF_DUTY for 600 minutes
+    When driver "D1" drives for 700 minutes
+    Then HOS status for driver "D1" should show VIOLATION for "DRIVE_11"
 ```
 
-**Behind the Scenes:**
+## Performance testing
 
-1. VirtualClock advances 660 minutes instantly
-2. EldMockClient records events with virtual timestamps
-3. HosCalculator evaluates FMCSA rules
-4. HosService returns violation status
-
-**No real waits. No hardware. Fully deterministic.**
-
-### Configuration
-
-```bash
-# .env settings for HOS/ELD
-DEMO_MODE=true              # Enable demo/mock mode
-ELD_MODE=mock               # Use EldMockClient (vs "api" for real hardware)
-TIMEZONE=America/New_York   # IANA timezone for HOS calculations
-HOS_RULESET=FMCSA          # Currently FMCSA only
-```
-
-### Related Files
-
-| File | Location | Purpose |
-| --- | --- | --- |
-| `VirtualClock.ts` | `src/helpers/` | Deterministic time control |
-| `HosCalculator.ts` | `src/helpers/` | FMCSA compliance calculations |
-| `HosService.ts` | `src/helpers/` | High-level HOS service |
-| `EldProvider.ts` | `src/api/clients/` | ELD interface |
-| `EldMockClient.ts` | `src/api/clients/` | Mock ELD implementation |
-| `EldApiClient.ts` | `src/api/clients/` | Real hardware adapter stub |
-| `hos-compliance.steps.ts` | `src/steps/domain/` | Gherkin step definitions |
-| `hos_compliance.feature` | `features/integration/` | HOS test scenarios |
-
----
-
-## ✍️ Writing Tests
-
-Tests are written in **Gherkin** — a simple English-like language that anyone can read and write!
-
-### Example Test
-
-```gherkin
-@smoke
-Feature: Vehicle Management
-  As a fleet manager
-  I want to see all vehicles
-  So that I can manage my fleet
-
-  Scenario: View the vehicles list
-    Given Odoo is accessible
-    When I navigate to "Vehicles" page
-    Then I should see "Vehicles" text
-```
-
-### Understanding the Format
-
-| Part | What It Means |
-| --- | --- |
-| `@smoke` | Tag for grouping (you can run all @smoke tests together) |
-| `Feature:` | The area being tested |
-| `Scenario:` | One specific test case |
-| `Given` | Setup / starting condition |
-| `When` | Action you're testing |
-| `Then` | Expected result |
-
-### Common Test Steps (Quick Reference)
-
-**Navigation:**
-
-- `Given Odoo is accessible` — open the configured Odoo (`BASE_URL`) and verify it is up
-- `When I navigate to "Vehicles" page` — go to a page
-- `When I click "Create" button` — click a button
-
-**Filling Forms:**
-
-- `When I fill "Name" with "John Doe"` — enter text
-- `When I select "Truck" from "Type" dropdown` — select from dropdown
-
-**Checking Results:**
-
-- `Then I should see "Success" text` — verify text is visible
-- `Then I should see "Save" button` — verify button exists
-
-> 📖 **Full reference:** See [STEP_LIBRARY.md](docs/STEP_LIBRARY.md) for all available steps!
-
----
-
-## 🧪 Command Reference (Complete List)
-
-### Test Execution
-
-| Command | Description |
-| --- | --- |
-| `npm run test:smoke` | Run smoke tests (quick validation) |
-| `npm run test:api` | Run API tests only |
-| `npm run test:api:smoke` | Run API smoke tests |
-| `npm run test:web` | Run web UI tests |
-| `npm run test:integration` | Run integration tests |
-| `npm run test:security` | Run security tests |
-| `npm run test:tablet` | Run all tablet tests |
-| `npm run test:tablet:galaxy` | Run Galaxy Tab specific tests |
-| `npm run test:tablet:ipad` | Run iPad Mini specific tests |
-| `npm run test:tablet:offline` | Run tablet offline sync tests |
-| `npm run test:accessibility` | Run accessibility tests |
-| `npm run test:all` | Run full regression suite (parallel) |
-| `npm run test:nightly` | Run smoke + API + integration |
-| `npm run test:module:finance` | Run finance compliance scenarios |
-| `npm run test:module:offline` | Run offline sync scenarios |
-| `npm run test:module:cti` | Run CTI screen pop scenarios |
-
-### Performance Testing
+Install k6 on the command path. Both scripts target `http://localhost:8069`.
 
 | Command | Description |
 | --- | --- |
 | `npm run perf:k6:smoke` | Run k6 smoke test (1 min, 10 VUs) |
 | `npm run perf:k6:load` | Run k6 load test (9 min, staged load) |
+
+## Command reference
 
 ### Reporting
 
@@ -751,13 +215,6 @@ Feature: Vehicle Management
 | -------------------------------- | --------------------------------------------------- |
 | `npm run allure:history:restore` | Restore Trend history into `allure-results/history` |
 | `npm run allure:history:save`    | Save `allure-report/history` into `allure-history`  |
-
-### Data Management
-
-| Command            | Description                               |
-| ------------------ | ----------------------------------------- |
-| `npm run db:seed`  | Seed test data (100 vehicles, 50 drivers) |
-| `npm run db:clean` | Clean up test data                        |
 
 ### Docker Management
 
@@ -778,56 +235,6 @@ Feature: Vehicle Management
 | `npm run type-check`   | TypeScript type checking        |
 | `npm run build`        | Compile TypeScript              |
 | `npm run clean`        | Clean generated files           |
-
-### Markdown Linting
-
-Markdown documentation follows strict style rules via [markdownlint](https://github.com/DavidAnson/markdownlint).
-
-**Check Markdown files:**
-
-```bash
-npx markdownlint-cli "**/*.md" --config .markdownlint.json
-```
-
-**Auto-fix Markdown issues:**
-
-```bash
-npx markdownlint-cli "**/*.md" --config .markdownlint.json --fix
-```
-
-**Configuration:**
-
-- Config file: [.markdownlint.json](.markdownlint.json)
-- Line length: 120 characters (MD013)
-- Tables and code blocks excluded from line length checks
-- Enforces blank lines around lists, headings, and fenced code blocks
-- Requires language identifiers for code fences
-
-**Common rules:**
-
-- `MD031/MD032`: Blank lines around fences and lists
-- `MD040`: Language specified for code blocks
-- `MD013`: Line length limit
-- `MD022`: Blank lines around headings
-
-## 🐳 Docker Commands
-
-```bash
-# Start services
-docker-compose up -d
-
-# Stop services
-docker-compose down
-
-# View logs
-docker-compose logs -f
-
-# Restart services
-docker-compose restart
-
-# Remove volumes (reset database)
-docker-compose down -v
-```
 
 ## 🔧 Configuration
 
@@ -860,13 +267,13 @@ docker-compose down -v
 | `ODOO_CONTAINER`        | `logistics-qa-odoo`     | Odoo container, read by @security-016        |
 | `ODOO_LOG_FILE`         | odoo.conf `logfile`     | Log file in the container; empty: logs       |
 
-Every value is checked when a run starts: a value that cannot be read (`HEADLESS=maybe`,
+The browser configuration rejects invalid typed values: a value that cannot be read (`HEADLESS=maybe`,
 `TIMEOUT=30s`, `BROWSER=chrome`) stops the run with a message naming the variable. Scenarios
 signing in as another user by name need `USER_<LOGIN>_PASSWORD`; there is no default password.
 
 ### ENV Contract (Integration Modules)
 
-These environment variables are required by the integration modules added under `features/api`, `features/mobile`, and `features/web`.
+The following settings apply to individual integration modules under `features/api`, `features/mobile`, and `features/web`.
 
 | Variable | Required By | Notes |
 | --- | --- | --- |
@@ -876,7 +283,7 @@ These environment variables are required by the integration modules added under 
 | `FINANCE_IFTA_ENDPOINT` | Financial Compliance | IFTA endpoint path or absolute URL |
 | `LOAD_STATUS_ENDPOINT` | Offline Sync | Polling endpoint for sync status (path or absolute URL) |
 | `CTI_WS_PATTERN` | CTI Screen Pop | WebSocket URL match pattern used by `page.routeWebSocket()` (supports `*` wildcards or `/regex/flags`) |
-| `DEMO_MODE` | HOS / ELD | Enable demo-only behavior (default `true`) |
+| `DEMO_MODE` | HOS / ELD | Parsed demo flag (default `true`). `ELD_MODE` selects the provider. |
 | `TIMEZONE` | HOS / ELD | IANA timezone name (default `UTC`) |
 | `ELD_MODE` | HOS / ELD | `mock` or `api` (default `mock`) |
 | `ELD_API_BASE_URL` | HOS / ELD | Required when `ELD_MODE=api` |
@@ -894,183 +301,6 @@ HEADLESS=false npm run test:smoke
 ```bash
 SLOW_MO=500 npm run test:smoke
 ```
-
-## 📝 Writing Tests
-
-### Feature File Example
-
-```gherkin
-@smoke
-Feature: My Feature
-  As a user
-  I want to do something
-  So that I achieve a goal
-
-  Scenario: My scenario
-    Given Odoo is accessible
-    When I navigate to "Vehicles" page
-    Then I should see "Vehicles" text
-```
-
-### Available Steps
-
-**Navigation:**
-
-- `Given Odoo is accessible`
-- `When I navigate to {string} page`
-- `When I click {string} link`
-- `When I refresh the page`
-
-**Interaction:**
-
-- `When I click {string} button`
-- `When I fill {string} with {string}`
-- `When I select {string} from {string} dropdown`
-- `When I check {string} checkbox`
-
-**Assertions:**
-
-- `Then I should see {string} text`
-- `Then I should see {string} button`
-- `Then {string} field should contain {string}`
-- `Then I should be in form view`
-
-## 🔍 Debugging
-
-### Use Playwright Codegen
-
-```bash
-npx playwright codegen http://localhost:8069
-```
-
-### Run Single Scenario
-
-```bash
-npx cucumber-js --name "Access Vehicles page"
-```
-
-### Run with Tags
-
-```bash
-npx cucumber-js --tags "@critical"
-npx cucumber-js --tags "@smoke and not @skip"
-```
-
-## 🛠 Troubleshooting
-
-### ❌ "Odoo not accessible" or page won't load
-
-| Try This | How |
-| --- | --- |
-| 1. Check Docker is running | Look for the whale icon in your system tray |
-| 2. Check containers are up | Run `docker-compose ps` — you should see "Up" status |
-| 3. Wait longer | First startup can take 1-2 minutes |
-| 4. Check logs | Run `docker-compose logs odoo` to see errors |
-| 5. Restart Docker | Run `docker-compose down` then `npm run docker:start` |
-
-### ❌ Tests failing — "element not found"
-
-| Try This | How |
-| --- | --- |
-| 1. Run with visible browser | Use `$env:HEADLESS="false"; npm run test:smoke` |
-| 2. Check element exists | Look at the page — is the button/field actually there? |
-| 3. Update selectors | UI may have changed — run `npx playwright codegen http://localhost:8069` |
-
-### ❌ "npm command not found"
-
-Node.js may not be installed correctly:
-
-1. Download from [nodejs.org](https://nodejs.org/)
-2. Close and reopen PowerShell
-3. Test with `node --version` — should show a version number
-
-### ❌ TypeScript errors
-
-```bash
-npm run type-check
-```
-
-If you see errors, try:
-
-```bash
-npm install
-npm run build
-```
-
----
-
-## 📊 Test Reports
-
-Reports are automatically generated when you run tests:
-
-| Report Type | Location | How to View |
-| --- | --- | --- |
-| **Cucumber HTML** | `reports/cucumber/index.html` | Open file in browser |
-| **Error screenshots** | `reports/screenshots/` | Open images to see failures |
-| **Allure Report** | `allure-report/` | Run `npm run report:allure:open` |
-
-### Recommended Workflow
-
-```bash
-# 1. Run your tests
-npm run test:api
-
-# 2. View the report with trend history
-npm run report:allure:trend:open
-```
-
-The Allure report will open in your browser showing:
-
-- Pass/fail summary
-- Trend charts (if you have history)
-- Detailed step-by-step execution
-- Screenshots for failed tests
-
----
-
-## 🏷 Test Tags Quick Reference
-
-Use tags to run specific groups of tests:
-
-| Tag | What It Runs | Command |
-| --- | --- | --- |
-| `@smoke` | Quick sanity checks | `npx cucumber-js --tags "@smoke"` |
-| `@critical` | Business-critical paths | `npx cucumber-js --tags "@critical"` |
-| `@api` | API tests only | `npx cucumber-js --tags "@api"` |
-| `@tablet` | Tablet device tests | `npx cucumber-js --tags "@tablet"` |
-| `@skip` | (Skips the test) | — |
-
-**Combining tags:**
-
-```bash
-# Run smoke tests except skipped ones
-npx cucumber-js --tags "@smoke and not @skip"
-
-# Run either critical or smoke tests
-npx cucumber-js --tags "@critical or @smoke"
-```
-
----
-
-## 📞 Need Help
-
-| Question | Where to Look |
-| --- | --- |
-| "What steps can I use?" | [STEP_LIBRARY.md](docs/STEP_LIBRARY.md) |
-| "Something's broken!" | [RUNBOOK.md](docs/RUNBOOK.md) or Troubleshooting section above |
-| "I found a bug" | Open an issue in the GitHub repository |
-| "I need a new feature" | Contact the QA team or open a feature request |
-
----
-
-## 🎉 Happy Testing
-
-Remember:
-
-- Start with `npm run test:smoke` to verify everything works
-- Use visible browser mode (`HEADLESS=false`) when debugging
-- Check the [STEP_LIBRARY.md](docs/STEP_LIBRARY.md) for all available test steps
-- When in doubt, check the [RUNBOOK.md](docs/RUNBOOK.md)
 
 ## Usage Notice
 

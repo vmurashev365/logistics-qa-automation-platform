@@ -30,8 +30,9 @@ flowchart LR
   use parameterized SQL.
 - [Hooks](../src/support/hooks.ts) create fresh browser contexts for `@browser` scenarios and authenticate a separate
   JSON-RPC client for `@odoo-api` scenarios. Apply both tags when a workflow uses both paths. PostgreSQL and
-  REST clients initialize on first use. Browser login remains a Gherkin step. Cleanup runs for any resources
-  the scenario acquired, including when setup fails.
+  REST clients initialize on first use. `@offline-sync` enables the in-memory PouchDB fixture where required,
+  including the full Fleet workflow. Browser login remains a Gherkin step. Cleanup covers resources acquired
+  before a setup failure.
 - Use native Playwright Test where browser assertions and test-scoped fixtures express the check directly.
   The [discard-driver test](../tests/driver-assignment.spec.ts) uses a typed API fixture to seed, read back and clean
   up its vehicle and drivers. The [health and login specs](../tests/smoke.spec.ts) run independently of that fixture.

@@ -266,7 +266,7 @@ Feature: Complete Vehicle Lifecycle
   # CROSS-SYSTEM WORKFLOW
   # ============================================
 
-  @full-workflow @integration-014 @browser @odoo-api
+  @full-workflow @integration-014 @browser @odoo-api @offline-sync
   Scenario: Complete vehicle workflow across all systems
     Given I am logged in as admin
     # 1. Create via UI (using working atomic steps)

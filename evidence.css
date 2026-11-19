@@ -1,0 +1,13 @@
+:root { color-scheme: light; font-family: system-ui, sans-serif; color: #172b36; background: #f3f7f8; }
+main { max-width: 59rem; margin: 0 auto; padding: clamp(1.15rem, 5vw, 4rem); }
+h1 { font-size: clamp(2rem, 6vw, 3.35rem); line-height: 1.1; letter-spacing: -.045em; margin: 0 0 .55rem; }
+p { line-height: 1.6; max-width: 46rem; }
+.details { margin-top: 0; color: #4d616e; }
+video { width: 100%; display: block; aspect-ratio: 16 / 9; border-radius: .45rem; background: #142b36; }
+a, .passed { color: #12614d; font-weight: 650; }
+a { text-underline-offset: .2em; }
+.table-wrap { overflow-x: auto; background: #fff; border: 1px solid #c7d8df; border-radius: .45rem; }
+table { border-collapse: collapse; width: 100%; text-align: left; }
+tr + tr, tbody { border-top: 1px solid #d9e5eb; }
+td, th { padding: .8rem .85rem; }
+thead { background: #e7eff2; }

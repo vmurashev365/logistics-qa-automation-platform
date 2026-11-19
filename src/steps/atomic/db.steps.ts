@@ -11,6 +11,7 @@
 
 import { Then, When, DataTable } from '@cucumber/cucumber';
 import { CustomWorld } from '../../support/custom-world';
+import { pollUntil, verify } from '../../support/evidence';
 
 // ============================================
 // VEHICLE DATABASE ASSERTIONS
@@ -85,40 +86,20 @@ Then(
 Then(
   'database vehicle {string} should have driver {string}',
   async function (this: CustomWorld, plate: string, driverName: string) {
-    if (!this.dbClient) {
+    const db = this.dbClient;
+    if (!db) {
       throw new Error('Database client not initialized. Ensure DB_ENABLED=true in environment.');
     }
 
-    // Retry mechanism to handle async replication delay between UI and DB
-    const maxRetries = 5;
-    const retryDelay = 1000; // 1 second
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      const vehicle = await this.dbClient.getVehicleWithDriver(plate);
-      
-      if (!vehicle) {
-        if (attempt === maxRetries) {
-          throw new Error(`Vehicle with plate "${plate}" not found in database after ${maxRetries} attempts`);
-        }
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-        continue;
-      }
-      
-      if (vehicle.driver_name?.includes(driverName)) {
-        // Success!
-        return;
-      }
-      
-      // Driver mismatch - retry if not last attempt
-      if (attempt < maxRetries) {
-        console.log(`⏳ Attempt ${attempt}/${maxRetries}: Driver not yet synced to DB (expected "${driverName}", got "${vehicle.driver_name || 'no driver'}")`);
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-      } else {
-        throw new Error(
-          `Expected vehicle "${plate}" to have driver "${driverName}", but got "${vehicle.driver_name || 'no driver'}" after ${maxRetries} attempts`
-        );
-      }
-    }
+    const vehicle = await pollUntil(
+      () => db.getVehicleWithDriver(plate),
+      (row) => row?.driver_name === driverName,
+      4000
+    );
+    verify(this, `PostgreSQL holds the driver assignment for "${plate}"`, [
+      { what: 'license plate', source: 'PostgreSQL', expected: plate, actual: vehicle?.license_plate ?? null },
+      { what: 'driver', source: 'PostgreSQL', expected: driverName, actual: vehicle?.driver_name ?? null },
+    ]);
   }
 );
 

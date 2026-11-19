@@ -16,7 +16,7 @@ Feature: Driver Assignment
     And I click on vehicle "MD-DRV-010"
     Then the vehicle form should show license plate "MD-DRV-010"
 
-  @crud
+  @crud @integration @portfolio
   Scenario: Assign a driver to a vehicle in the vehicle form
     Given vehicle "MD-DRV-011" exists in the system
     When I navigate to "vehicles" page
@@ -24,3 +24,4 @@ Feature: Driver Assignment
     And I click on vehicle "MD-DRV-011"
     And I assign driver "Maria Rusu" via UI
     Then vehicle "MD-DRV-011" should have driver "Maria Rusu" in Odoo
+    And database vehicle "MD-DRV-011" should have driver "Maria Rusu"

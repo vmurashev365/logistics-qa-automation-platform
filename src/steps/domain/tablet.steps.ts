@@ -342,33 +342,6 @@ Then(
   }
 );
 
-/**
- * Assert form data is preserved after orientation change.
- * 
- * @example
- * Then all form data should be preserved
- */
-Then(
-  'all form data should be preserved',
-  async function (this: CustomWorld) {
-    // Get previously stored form values
-    const licensePlate = this.getTestData<string>('licensePlate') || 'MD-ORIENT-001';
-    const model = this.getTestData<string>('model') || 'Freightliner Cascadia';
-
-    // Verify values are still present
-    const plateField = this.page.locator('[name="license_plate"], input[placeholder*="License"]');
-    const modelField = this.page.locator('[name="model_id"], [name="model"]');
-
-    if (await plateField.isVisible()) {
-      await expect(plateField).toHaveValue(licensePlate);
-    }
-    
-    if (await modelField.isVisible()) {
-      await expect(modelField).toHaveValue(model);
-    }
-  }
-);
-
 // ============================================
 // Keyboard Handling Steps
 // ============================================

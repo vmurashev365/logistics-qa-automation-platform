@@ -1,13 +1,19 @@
 # Logistics QA Automation Platform
 
-This portfolio project tests logistics workflows against Odoo 17 Community and PostgreSQL 15.
-Cucumber runs the Gherkin scenarios. Playwright drives the browser, Odoo JSON-RPC manages Fleet records,
-and PostgreSQL checks verify stored data. The repository also contains k6 scripts and an optional
-Playwright Test runner for the specs in `tests/`. To run its Chromium project, use `npx playwright test --project chromium`.
+[![Core QA checks](https://github.com/vmurashev365/logistics-qa-automation-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/vmurashev365/logistics-qa-automation-platform/actions/workflows/ci.yml)
 
-The project demonstrates automation techniques for logistics workflows. Formal compliance certification is outside
-its scope. See [setup](#quick-start), [suite selection](#running-tests), [reports](#reports-and-ci) and the
-[step library](docs/STEP_LIBRARY.md).
+## Case study · Driver assignment
+
+A driver assignment can look saved on the dispatcher's screen while the Fleet API or database still holds the old driver.
+That leaves dispatch and downstream tools working from different records.
+
+In a local Odoo 17 Fleet demo, Playwright assigned **Maria Rusu** to vehicle **MD-DRV-011** through the vehicle form.
+Cucumber then checked the driver through Odoo JSON-RPC and independently checked the stored relationship in PostgreSQL.
+Both reads matched the expected assignment. The report shows the expected and observed values from the recorded run.
+
+[Watch the recording](https://odoo-fleet-driver-assignment.vmurashev.chatgpt.site/) ·
+[Open the check report](https://odoo-fleet-driver-assignment.vmurashev.chatgpt.site/report) ·
+[Read the Gherkin scenario](features/web/fleet/driver-assignment.feature)
 
 ## Quick start
 
@@ -28,6 +34,7 @@ set the URL and credentials for a dedicated test database. Smoke scenarios creat
 
 ```bash
 npm run test:smoke
+npm run test:web -- --tags @portfolio
 ```
 
 To run just **Access Vehicles page**, use `npm run test:smoke -- --tags @smoke-001`.
@@ -40,22 +47,25 @@ glob in `cucumber.js` and can select scenarios in other files. The [runbook](doc
 | --- | --- |
 | `npm run test:smoke` | Fleet browser and tablet quick checks. Excludes `@api`, `@module_loads` and `@wip`. |
 | `npm run test:api` / `npm run test:api:smoke` | Core Odoo Fleet API checks / the tagged API smoke check. |
-| `npm run test:web` | Fleet UI and CTI screen pop. Use `npm run test:web -- --tags @fleet` for Fleet alone. |
-| `npm run test:integration` | Fleet, UI/API/DB consistency and HOS/ELD. Excludes finance, offline-sync and CTI module tags. |
+| `npm run test:web` | Fleet UI and CTI screen pop. Use `npm run test:web -- --tags @fleet` for Fleet checks. |
+| `npm run test:integration` | Fleet, UI/API/DB consistency and simulated HOS/ELD rules. Excludes finance, offline-sync and CTI module tags. |
+| `npm run test:core` / `npm run test:nightly` | Union of smoke, API and integration selections. Overlapping scenarios run once. |
+| `npm run test:chromium` | Four native Playwright smoke checks for health, the login page and valid/invalid login. |
 | `npm run test:security` | Access control, sessions, input handling, export and audit. Some checks require PostgreSQL or access to the Odoo server log. Anonymization is tagged `@wip`. |
-| `npm run test:tablet` | Responsive tablet scenarios, including BOL and offline sync. For Fleet quick checks use `npm run test:tablet -- --tags @quick-check`. |
-| `npm run test:tablet:galaxy` / `npm run test:tablet:ipad` | Device-tagged browser scenarios, including BOL. |
-| `npm run test:tablet:offline` / `npm run test:accessibility` | Offline tablet workflows / touch-target and reachability checks on the Loads UI. |
+| `npm run test:tablet` | Local Fleet form checks using tablet-sized viewports and orientation changes. |
+| `npm run test:tablet:galaxy` / `npm run test:tablet:ipad` | Device-tagged Fleet browser checks. |
+| `npm run test:tablet:offline` | Browser POD sync scenario. Requires a compatible Loads UI and status service. |
+| `npm run test:accessibility` | Zero runnable scenarios. Exits with an explanation until the Loads touch-target and reachability steps are implemented. |
 | `npm run test:module:finance` | Salary and IFTA checks require a REST service, configured endpoints and a bearer token. |
 | `npm run test:module:offline` | In-memory vehicle sync and browser load/POD sync. The browser scenario needs a Loads UI, status endpoint and token. |
 | `npm run test:module:cti` | In-memory call workflows and browser screen pop. The browser scenario needs a CTI-enabled UI and matching contact. |
 | `npm run test:visual` | Two Fleet snapshots. Create baselines before comparison. |
-| `npm run test:nightly` | Smoke, API and integration scripts in sequence. |
-| `npm run test:all` | All scenarios except `@wip`, including optional modules, using two workers. |
+| `npm run test:all` | All scenarios outside `@wip`, including external-service scenarios and visual checks, using two workers. |
 
-The BOL and browser load/POD features contain undefined steps. This affects the full, tablet, offline and
-accessibility selections even when the external services are configured. The `@serial` tag gives a scenario exclusive
-execution within a parallel Cucumber run. See the [script definitions](package.json) for the exact tag expressions.
+The `@wip` tag marks unfinished scenarios such as the Loads BOL upload and signature flows. The `@external-service`
+tag marks scenarios with step definitions that need a compatible deployment beyond the bundled stack. CTI call events,
+offline vehicle sync and HOS/ELD use simulations. Visual checks require baselines and some security checks require
+additional accounts or server log access. See the [mobile strategy](docs/MOBILE_STRATEGY.md) and [script definitions](package.json).
 
 ## Reports and CI
 
@@ -64,10 +74,10 @@ Run `npm run report:cucumber` to generate `reports/cucumber/index.html` from JSO
 `npm run report:allure:trend:open` generates and opens the Allure report and saves local trend history.
 Failure screenshots go to `reports/screenshots/` when enabled.
 
-The [GitHub Actions workflow](.github/workflows/ci.yml) runs `npm run test:smoke` in headless Chromium on pushes
-and pull requests targeting `main`, daily at 03:30 UTC, and on manual dispatch. CI uploads available Cucumber
-and Allure artifacts, including a history snapshot. Cross-run trends require a previous snapshot to be restored.
-The workflow currently only uploads it.
+The [GitHub Actions workflow](.github/workflows/ci.yml) runs type-check, lint, the Cucumber core suites and the native
+Chromium smoke tests on pushes and pull requests targeting `main`, daily at 03:30 UTC and on manual dispatch.
+Download the Cucumber, Allure and Playwright HTML reports from **Artifacts** on the run page. GitHub requires a
+signed-in account for Actions artifact downloads. The driver-assignment recording and report above are public.
 
 ## Test data
 
@@ -165,7 +175,7 @@ Start with the scenarios in [features](features) and use the [step library](docs
 | **[STEP_LIBRARY.md](docs/STEP_LIBRARY.md)** | Product Owners, Business Analysts | Registered steps and Fleet examples |
 | **[RUNBOOK.md](docs/RUNBOOK.md)** | Anyone | Troubleshooting guide and common fixes |
 | **[BDD_ARCHITECTURE.md](docs/BDD_ARCHITECTURE.md)** | QA Engineers, Developers | 3-Layer BDD architecture (Atomic → Domain → Composite) |
-| **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** | QA Engineers, Developers | Complete framework architecture (8-layer structure) |
+| **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** | QA Engineers, Developers | Browser, JSON-RPC and PostgreSQL paths |
 | **[API_TESTING.md](docs/API_TESTING.md)** | QA Engineers | Guide for API testing |
 | **[MOBILE_STRATEGY.md](docs/MOBILE_STRATEGY.md)** | QA Engineers | Mobile testing roadmap |
 | **[DATA_STRATEGY.md](docs/DATA_STRATEGY.md)** | QA Engineers | Test data management |
@@ -190,12 +200,16 @@ Feature: HOS example
 
 ## Performance testing
 
-Install k6 on the command path. Both scripts target `http://localhost:8069`.
+Install k6 on the command path. Both scripts accept `BASE_URL` and default to `http://localhost:8069`.
 
 | Command | Description |
 | --- | --- |
-| `npm run perf:k6:smoke` | Run k6 smoke test (1 min, 10 VUs) |
-| `npm run perf:k6:load` | Run k6 load test (9 min, staged load) |
+| `npm run perf:k6:smoke` | Checks public HTTP availability and response content for the health endpoint and login form (1 minute, 10 VUs). |
+| `npm run perf:k6:load` | Measures authenticated Odoo JSON-RPC `fleet.vehicle.search_read` and validates a result array of up to 20 Fleet records (9 minutes, up to 100 VUs). |
+
+Set `ODOO_USERNAME` and `ODOO_PASSWORD` in the shell for the Fleet read. `ODOO_DATABASE` defaults to
+`logistics_qa_db`. To verify the request and checks on the demo stack at lower load, run
+`npm run perf:k6:load -- --stage 5s:2 --stage 15s:2 --stage 5s:0`.
 
 ## Command reference
 

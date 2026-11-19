@@ -1,150 +1,118 @@
-name: CI — Smoke Tests & Reports
+name: CI — Core QA Checks
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_dispatch:          # manual trigger from GitHub UI / mobile app
+  workflow_dispatch:
   schedule:
-    - cron: '30 3 * * *'     # nightly at 03:30 UTC
+    - cron: '30 3 * * *'
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  smoke:
-    name: Smoke Tests
+  core:
+    name: Type-check, lint and Odoo core checks
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: odoo
-          POSTGRES_PASSWORD: odoo
-          POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U odoo -d postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    timeout-minutes: 20
+    env:
+      BASE_URL: http://127.0.0.1:8069
+      ODOO_USERNAME: admin
+      ODOO_PASSWORD: admin
+      ODOO_DATABASE: logistics_qa_db
+      HEADLESS: 'true'
+      BROWSER: chromium
+      DB_ENABLED: 'true'
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+      POSTGRES_DATABASE: logistics_qa_db
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm run type-check
+      - run: npm run lint
+      - run: npx playwright install --with-deps chromium
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Start Odoo
+      - name: Start and verify Fleet demo stack
         run: |
-          docker run -d --name odoo \
-            --network host \
-            -e HOST=127.0.0.1 \
-            -e PORT=5432 \
-            -e USER=odoo \
-            -e PASSWORD=odoo \
-            odoo:17.0 \
-            odoo --database=logistics_qa_db --db_host=127.0.0.1 --db_port=5432 --db_user=odoo --db_password=odoo --init=fleet --without-demo=False --load-language=en_US
+          docker compose up -d --wait --wait-timeout 240
+          curl --fail --silent --show-error "${BASE_URL}/web/health"
+          docker compose exec -T postgres psql -U odoo -d logistics_qa_db -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM fleet_vehicle'
 
-      - name: Wait for Odoo to be ready
-        run: |
-          echo "Waiting for Odoo (up to 120s)..."
-          for i in $(seq 1 24); do
-            if curl -sf http://localhost:8069/web/health > /dev/null 2>&1; then
-              echo "Odoo is ready."
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Odoo failed to start in time."
-          docker logs odoo
-          exit 1
+      - name: Run Cucumber core selection
+        id: cucumber
+        run: npm run test:core
 
-      - name: Ensure report directories
-        run: mkdir -p reports/cucumber reports/screenshots allure-results
-
-      - name: Run smoke tests
-        run: npm run test:smoke
-        env:
-          BASE_URL: http://localhost:8069
-          ODOO_USERNAME: admin
-          ODOO_PASSWORD: admin
-          ODOO_DATABASE: logistics_qa_db
-          HEADLESS: 'true'
-          POSTGRES_HOST: 127.0.0.1
-          POSTGRES_PORT: 5432
-          POSTGRES_USER: odoo
-          POSTGRES_PASSWORD: odoo
-          POSTGRES_DATABASE: logistics_qa_db
+      - name: Run native Chromium smoke checks
+        id: chromium
+        if: ${{ !cancelled() && steps.cucumber.outcome != 'skipped' && steps.cucumber.outcome != '' }}
+        run: npm run test:chromium
 
       - name: Generate Cucumber HTML report
-        if: always()
-        run: npm run report:cucumber || true
+        if: ${{ !cancelled() && steps.cucumber.outcome != 'skipped' && steps.cucumber.outcome != '' }}
+        run: npm run report:cucumber
 
-      - name: Generate Allure report
-        if: always()
-        run: npm run report:allure:trend || true
+      - name: Generate Allure HTML report
+        if: ${{ !cancelled() && steps.cucumber.outcome != 'skipped' && steps.cucumber.outcome != '' }}
+        run: |
+          npm run report:allure
+          test -s allure-report/index.html
 
-      - name: Upload Allure results
-        if: always()
+      - name: Upload Cucumber reports
+        if: ${{ !cancelled() && steps.cucumber.outcome != 'skipped' && steps.cucumber.outcome != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: allure-results
-          path: allure-results/
-          retention-days: 14
-          if-no-files-found: ignore
-
-      - name: Upload Allure report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: allure-report
-          path: allure-report/
-          retention-days: 14
-          if-no-files-found: ignore
-
-      - name: Upload Allure history
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: allure-history
-          path: allure-history/
-          retention-days: 30
-          if-no-files-found: ignore
-
-      - name: Upload Cucumber report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cucumber-report
+          name: cucumber-core-report
           path: reports/cucumber/
+          if-no-files-found: error
           retention-days: 14
-          if-no-files-found: ignore
 
-      - name: Upload failure screenshots
-        if: failure()
+      - name: Upload Allure HTML report
+        if: ${{ !cancelled() && steps.cucumber.outcome != 'skipped' && steps.cucumber.outcome != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: failure-screenshots
-          path: reports/screenshots/
-          if-no-files-found: ignore
-          retention-days: 7
+          name: allure-core-report
+          path: allure-report/
+          if-no-files-found: error
+          retention-days: 14
 
-      - name: Stop Odoo
-        if: always()
-        run: docker stop odoo || true
+      - name: Upload Playwright HTML report
+        if: ${{ !cancelled() && steps.chromium.outcome != 'skipped' && steps.chromium.outcome != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-chromium-report
+          path: playwright-report/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Summarize report locations
+        if: ${{ !cancelled() && steps.cucumber.outcome != 'skipped' && steps.cucumber.outcome != '' }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          Download the Cucumber, Allure and Chromium HTML reports from the **Artifacts** section of this run.
+          Open `cucumber-report.html` for Cucumber's native output or `index.html` for the generated reports.
+          EOF
+
+      - name: Show demo stack diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --tail 80
+          docker compose exec -T odoo tail -n 80 /var/log/odoo/odoo.log || true

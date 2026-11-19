@@ -5,8 +5,7 @@
  * Designed to be OCA-ready: inspections are typically introduced via OCA modules.
  */
 
-import { OdooJsonRpcClient } from '../../clients/OdooJsonRpcClient';
-import { OdooApiError } from '../../clients/OdooJsonRpcClient';
+import { OdooApiError, OdooJsonRpcClient } from '../../clients/OdooJsonRpcClient';
 import type { InspectionLog, InspectionResult, IsoDateString } from '../../../types/fleet';
 
 interface OdooInspectionRecord {

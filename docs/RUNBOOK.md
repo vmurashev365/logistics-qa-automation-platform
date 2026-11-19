@@ -23,7 +23,9 @@ credentials. Compose initializes Odoo 17 with Fleet demo data on port 8069 and P
 | --- | --- |
 | Inspect the smoke selection without executing steps | `npm run test:smoke -- --dry-run` |
 | Open the Vehicles page in one scenario | `npm run test:smoke -- --tags @smoke-001` |
-| Run the CI smoke suite locally | `npm run test:smoke` |
+| Run the Cucumber suites used in CI | `npm run test:core` |
+| Run the native Chromium smoke suite | `npm run test:chromium` |
+| Reproduce the driver assignment | `npm run test:web -- --tags @portfolio` |
 | Exercise Fleet web scenarios | `npm run test:web -- --tags @fleet` |
 | Check responsive layouts on the local Fleet UI | `npm run test:tablet -- --tags @quick-check` |
 | Exercise the mock HOS rules | `npm run test:integration -- --tags @hos` |
@@ -50,8 +52,9 @@ and `ambiguous` in the output. The [suite table](../README.md) lists dependencie
 - **Security audit log.** The failed-login audit scenario reads `ODOO_LOG_FILE` in `ODOO_CONTAINER`. The local
   defaults are `/var/log/odoo/odoo.log` and `logistics-qa-odoo`. An explicitly empty `ODOO_LOG_FILE` selects
   the container output for deployments that log to stdout or stderr.
-- **Undefined steps.** Compare the phrase to a registered definition. Some BOL and offline POD scenarios have gaps
-  even on a configured Loads deployment. See the [step library](STEP_LIBRARY.md) and [mobile strategy](MOBILE_STRATEGY.md).
+- **Undefined steps.** Compare the phrase to a registered definition. The Loads BOL scenarios with missing steps
+  are tagged `@wip`. The separate browser POD sync case has bound steps and requires the external Loads deployment.
+  See the [step library](STEP_LIBRARY.md) and [mobile strategy](MOBILE_STRATEGY.md).
 
 ## Database checks
 

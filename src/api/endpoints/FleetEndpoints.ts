@@ -308,7 +308,7 @@ export class FleetEndpoints {
    */
   async deleteVehiclesByPlatePattern(platePattern: string): Promise<number> {
     const vehicles = await this.searchVehiclesByPlate(platePattern);
-    const ids = vehicles.map(v => v.id!).filter(id => id !== undefined);
+    const ids = vehicles.map(vehicle => vehicle.id).filter(id => id !== undefined);
     if (ids.length > 0) {
       await this.deleteVehicles(ids);
     }

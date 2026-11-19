@@ -5,7 +5,7 @@
 For the local Odoo Fleet stack, run the tablet quick checks.
 
 ```bash
-npm run test:tablet -- --tags @quick-check
+npm run test:tablet
 ```
 
 The Galaxy Tab and iPad Mini Cucumber steps resize the existing Playwright page to 1200 × 800 and 744 × 1133
@@ -16,21 +16,20 @@ defines separate device projects for specs under `tests/`.
 
 ## Bills of lading and proof of delivery
 
-`npm run test:tablet` includes the Loads scenarios for camera and gallery upload, offline queueing,
-signature capture, keyboard behavior, orientation and accessibility. The Loads UI is an application dependency.
-Some Gherkin actions, including opening load details and capturing a document photo, have no matching definition.
-Installing the application alone cannot complete those scenarios. `test:tablet:galaxy`, `test:tablet:ipad`,
-`test:tablet:offline` and `test:accessibility` also select parts of this feature.
-[BOL feature](../features/mobile/tablet-bol-upload.feature)
+The BOL feature tags 21 unfinished scenarios `@wip`. They cover camera and gallery upload, offline queues,
+signature capture, keyboard and orientation behavior, error handling, and touch targets. The four touch-target and
+reachability scenarios account for the entire accessibility selection. `npm run test:accessibility` exits with a
+message when it finds no runnable cases. The Fleet form orientation scenario is implemented and remains in
+`test:tablet`. [BOL feature](../features/mobile/tablet-bol-upload.feature)
 
 ## Offline sync
 
 - `npm run test:module:offline -- --tags @offline-sync` selects the vehicle-lifecycle scenarios. They exercise
   pending documents, conflict resolution and batch sync using the in-memory PouchDB adapter created with
   `OFFLINE_MODE=mock`. [Vehicle lifecycle](../features/integration/vehicle-lifecycle.feature)
-- The browser load/POD scenario toggles the Playwright context offline and online. Its implementation expects
-  a Loads/POD UI and a status endpoint with `API_AUTH_TOKEN` and `LOAD_STATUS_ENDPOINT`. `API_BASE_URL` defaults
-  to `BASE_URL`. The step containing the literal text `(should queue)` currently has no matching Cucumber expression.
+- `npm run test:tablet:offline` selects the browser load/POD scenario. It toggles the Playwright context offline
+  and online and is tagged `@external-service`. It requires a Loads/POD UI and a status endpoint with
+  `API_AUTH_TOKEN` and `LOAD_STATUS_ENDPOINT`. `API_BASE_URL` defaults to `BASE_URL`.
   [Browser scenario](../features/mobile/offline_sync.feature) · [Definitions](../src/steps/domain/offline-sync.steps.ts)
 
 ## Native driver app roadmap

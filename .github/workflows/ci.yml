@@ -19,7 +19,7 @@ concurrency:
 jobs:
   core:
     name: Type-check, lint and Odoo core checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       BASE_URL: http://127.0.0.1:8069

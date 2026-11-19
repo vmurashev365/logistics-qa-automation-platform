@@ -6,6 +6,7 @@
 
 import { When } from '@cucumber/cucumber';
 import { CustomWorld } from '../../support/custom-world';
+import { firstVisible } from '../../utils/wait';
 import { UI_MAP, isValidFieldKey, isValidButtonKey, getFieldAliases, getButtonAliases } from '../../ui-map';
 
 /**
@@ -42,26 +43,16 @@ When('I click {string} button', { timeout: 15000 }, async function (this: Custom
     }
   }
   
-  // Try each label until one works
-  let clicked = false;
-  for (const label of labelsToTry) {
-    try {
-      const button = this.page.getByRole('button', { name: label });
-      if (await button.isVisible({ timeout: 2000 })) {
-        await button.click();
-        clicked = true;
-        break;
-      }
-    } catch {
-      // Try next alias
-    }
+  // Wait for any of the labels at once; prefer them in the order listed
+  const button = await firstVisible(
+    labelsToTry.map((label) => this.page.getByRole('button', { name: label })),
+    8000
+  );
+  if (!button) {
+    throw new Error(`No visible button "${buttonKey}" (tried: ${labelsToTry.join(', ')})`);
   }
-  
-  if (!clicked) {
-    // Final fallback: try first label with longer wait
-    await this.page.getByRole('button', { name: labelsToTry[0] }).click();
-  }
-  
+  await button.click();
+
   // Wait for page response - but don't wait for specific elements that may not appear (e.g., failed login)
   await this.page.waitForLoadState('domcontentloaded');
 });
@@ -103,57 +94,21 @@ When('I fill {string} with {string}', { timeout: 20000 }, async function (this: 
     }
   }
   
-  // Try each label until one works
-  let filled = false;
-  for (const label of labelsToTry) {
-    try {
-      // Try textbox role first (most reliable for Odoo)
-      let field = this.page.getByRole('textbox', { name: label });
-      if (await field.isVisible({ timeout: 1500 })) {
-        await field.fill(value);
-        filled = true;
-        break;
-      }
-      
-      // Fallback to getByLabel
-      field = this.page.getByLabel(label);
-      if (await field.isVisible({ timeout: 1500 })) {
-        await field.fill(value);
-        filled = true;
-        break;
-      }
-    } catch {
-      // Try next alias
-    }
-  }
-  
-  if (!filled) {
-    // Try by name attribute (snake_case) - Odoo uses this format
-    try {
-      const fieldByName = this.page.locator(`[name="${snakeCaseKey}"] input, input[name="${snakeCaseKey}"]`);
-      if (await fieldByName.isVisible({ timeout: 2000 })) {
-        await fieldByName.fill(value);
-        filled = true;
-      }
-    } catch {
-      // Continue
-    }
-  }
-  
-  if (!filled) {
-    // Try div with name and inner input (common in Odoo 17)
-    try {
-      const divField = this.page.locator(`div[name="${snakeCaseKey}"] input`);
-      if (await divField.isVisible({ timeout: 2000 })) {
-        await divField.fill(value);
-        filled = true;
-      }
-    } catch {
-      // Continue
-    }
-  }
-  
-  if (!filled) {
+  // Wait for any of the candidates at once; prefer them in this order: textbox by label, field
+  // by label, then Odoo's field name (snake_case), as an input or inside the field widget
+  const field = await firstVisible(
+    [
+      ...labelsToTry.flatMap((label) => [
+        this.page.getByRole('textbox', { name: label }),
+        this.page.getByLabel(label),
+      ]),
+      this.page.locator(`[name="${snakeCaseKey}"] input, input[name="${snakeCaseKey}"]`),
+    ],
+    8000
+  );
+  if (field) {
+    await field.fill(value);
+  } else {
     throw new Error(`MISSING_UI_MAP: Could not find field "${fieldKey}" (tried labels: ${labelsToTry.join(', ')}, name: ${snakeCaseKey})`);
   }
   
@@ -210,23 +165,19 @@ When('I select {string} from {string} dropdown', async function (this: CustomWor
  * Selects an option from a visible dropdown/combobox
  */
 When('I select {string} option', async function (this: CustomWorld, option: string) {
-  // Try clicking option in dropdown
-  const optionElement = this.page.getByRole('option', { name: option });
-  
-  if (await optionElement.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await optionElement.click();
-  } else {
-    // Try listitem or generic text
-    const listItem = this.page.getByRole('listitem').filter({ hasText: option });
-    if (await listItem.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await listItem.click();
-    } else {
-      // Odoo-specific dropdown option
-      await this.page.locator(`.o_m2o_dropdown_option:has-text("${option}")`).first().click();
-    }
+  // An option, a list item, or Odoo's many2one dropdown option, whichever appears
+  const choice = await firstVisible(
+    [
+      this.page.getByRole('option', { name: option }),
+      this.page.getByRole('listitem').filter({ hasText: option }),
+      this.page.locator('.o_m2o_dropdown_option').filter({ hasText: option }),
+    ],
+    5000
+  );
+  if (!choice) {
+    throw new Error(`No visible option "${option}"`);
   }
-  
-  await this.page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+  await choice.click();
 });
 
 /**
@@ -321,7 +272,6 @@ When('I focus on {string} field', async function (this: CustomWorld, label: stri
  */
 When('I click text {string}', async function (this: CustomWorld, text: string) {
   await this.page.getByText(text).first().click();
-  await this.page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
 });
 
 /**
@@ -331,7 +281,6 @@ When('I click text {string}', async function (this: CustomWorld, text: string) {
 When('I click {string} tab', async function (this: CustomWorld, tabName: string) {
   const tab = this.page.getByRole('tab', { name: new RegExp(tabName, 'i') });
   await tab.click();
-  await this.page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
 });
 
 /**

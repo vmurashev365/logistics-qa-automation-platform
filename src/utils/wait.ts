@@ -105,17 +105,36 @@ export async function waitForUrl(
 }
 
 /**
- * Wait for network to be idle
- * @param page - Playwright page
- * @param options - Wait options
+ * Wait up to `timeoutMs` for the locator to be visible; true if it became visible.
+ * Playwright's locator.isVisible() does not wait (its timeout option is ignored), so a
+ * "wait a little for X" check must use this instead.
  */
-export async function waitForNetworkIdle(
-  page: Page,
-  options: WaitOptions = {}
-): Promise<void> {
-  const { timeout } = { ...DEFAULT_WAIT_OPTIONS, ...options };
-  await page.waitForLoadState('networkidle', { timeout });
+export async function isVisibleWithin(locator: Locator, timeoutMs: number): Promise<boolean> {
+  try {
+    await locator.first().waitFor({ state: 'visible', timeout: timeoutMs });
+    return true;
+  } catch {
+    return false;
+  }
 }
+
+/**
+ * The first of `candidates` (in the given order) that is visible once any of them has appeared
+ * within `timeoutMs`, or null if none appears. The candidates are awaited together, so several
+ * alternatives (e.g. labels that differ between Odoo versions) cost one timeout, not one each.
+ */
+export async function firstVisible(candidates: Locator[], timeoutMs: number): Promise<Locator | null> {
+  if (candidates.length === 0) return null;
+  const anyOf = candidates.slice(1).reduce((all, candidate) => all.or(candidate), candidates[0]);
+  if (!(await isVisibleWithin(anyOf, timeoutMs))) return null;
+  for (const candidate of candidates) {
+    if (await candidate.first().isVisible()) return candidate.first();
+  }
+  return null;
+}
+
+// No "wait for network idle": Odoo keeps connections open (bus, polling), so networkidle
+// never arrives and such a wait only burns its whole timeout. Wait for the element instead.
 
 /**
  * Wait for DOM content to be loaded
@@ -231,7 +250,8 @@ export default {
   waitForHidden,
   waitForAttached,
   waitForUrl,
-  waitForNetworkIdle,
+  isVisibleWithin,
+  firstVisible,
   waitForDomContentLoaded,
   waitForLoad,
   waitForText,

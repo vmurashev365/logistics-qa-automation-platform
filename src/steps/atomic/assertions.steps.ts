@@ -8,6 +8,7 @@ import { Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 import { CustomWorld } from '../../support/custom-world';
 import { UI_MAP, isValidFieldKey, getFieldAliases } from '../../ui-map';
+import { firstVisible } from '../../utils/wait';
 
 /**
  * Then I should see {string} text
@@ -122,43 +123,23 @@ Then('{string} field should contain {string}', { timeout: 15000 }, async functio
     }
   }
   
-  // Try each label until one works
-  let verified = false;
-  for (const label of labelsToTry) {
-    try {
-      // Try textbox role first
-      let field = this.page.getByRole('textbox', { name: label });
-      if (await field.isVisible({ timeout: 1500 })) {
-        await expect(field).toHaveValue(expectedValue, { timeout: 5000 });
-        verified = true;
-        break;
-      }
-      
-      // Fallback to getByLabel
-      field = this.page.getByLabel(label);
-      if (await field.isVisible({ timeout: 1500 })) {
-        await expect(field).toHaveValue(expectedValue, { timeout: 5000 });
-        verified = true;
-        break;
-      }
-    } catch {
-      // Try next alias
-    }
+  // Find the field first (any label variant, then Odoo's field name), then compare its value.
+  // A wrong value fails here with expected/actual; it is not mistaken for "field not found".
+  const snakeCaseKey = fieldKey.replace(/([A-Z])/g, '_$1').toLowerCase().replace(/^_/, '');
+  const field = await firstVisible(
+    [
+      ...labelsToTry.flatMap((label) => [
+        this.page.getByRole('textbox', { name: label }),
+        this.page.getByLabel(label),
+      ]),
+      this.page.locator(`[name="${snakeCaseKey}"] input, input[name="${snakeCaseKey}"]`),
+    ],
+    8000
+  );
+  if (!field) {
+    throw new Error(`Could not find field "${fieldKey}" (tried labels: ${labelsToTry.join(', ')}, name: ${snakeCaseKey})`);
   }
-  
-  if (!verified) {
-    // Final fallback: try by name attribute (snake_case)
-    const snakeCaseKey = fieldKey.replace(/([A-Z])/g, '_$1').toLowerCase().replace(/^_/, '');
-    const fieldByName = this.page.locator(`[name="${snakeCaseKey}"] input, input[name="${snakeCaseKey}"]`);
-    if (await fieldByName.isVisible({ timeout: 2000 })) {
-      await expect(fieldByName).toHaveValue(expectedValue, { timeout: 5000 });
-      verified = true;
-    }
-  }
-  
-  if (!verified) {
-    throw new Error(`Could not verify field "${fieldKey}" (tried labels: ${labelsToTry.join(', ')})`);
-  }
+  await expect(field, `field "${fieldKey}"`).toHaveValue(expectedValue, { timeout: 5000 });
 });
 
 /**
@@ -267,16 +248,9 @@ Then('I should see an error message', async function (this: CustomWorld) {
     '[role="alert"]',
   ];
   
-  let errorFound = false;
-  for (const selector of errorSelectors) {
-    const error = this.page.locator(selector).first();
-    if (await error.isVisible({ timeout: 1000 }).catch(() => false)) {
-      errorFound = true;
-      break;
-    }
-  }
-  
-  expect(errorFound).toBeTruthy();
+  // Wait for any of them at once (isVisible alone would not wait)
+  const found = await firstVisible(errorSelectors.map((selector) => this.page.locator(selector)), 5000);
+  expect(found !== null, "error message visible").toBe(true);
 });
 
 /**
@@ -290,16 +264,9 @@ Then('I should see a success message', async function (this: CustomWorld) {
     '.success-message',
   ];
   
-  let successFound = false;
-  for (const selector of successSelectors) {
-    const success = this.page.locator(selector).first();
-    if (await success.isVisible({ timeout: 1000 }).catch(() => false)) {
-      successFound = true;
-      break;
-    }
-  }
-  
-  expect(successFound).toBeTruthy();
+  // Wait for any of them at once (isVisible alone would not wait)
+  const found = await firstVisible(successSelectors.map((selector) => this.page.locator(selector)), 5000);
+  expect(found !== null, "success message visible").toBe(true);
 });
 
 /**
@@ -385,16 +352,9 @@ Then('I should see loading indicator', async function (this: CustomWorld) {
     '[role="progressbar"]',
   ];
   
-  let loadingFound = false;
-  for (const selector of loadingSelectors) {
-    const loading = this.page.locator(selector).first();
-    if (await loading.isVisible({ timeout: 1000 }).catch(() => false)) {
-      loadingFound = true;
-      break;
-    }
-  }
-  
-  expect(loadingFound).toBeTruthy();
+  // Wait for any of them at once (isVisible alone would not wait)
+  const found = await firstVisible(loadingSelectors.map((selector) => this.page.locator(selector)), 5000);
+  expect(found !== null, "loading indicator visible").toBe(true);
 });
 
 /**

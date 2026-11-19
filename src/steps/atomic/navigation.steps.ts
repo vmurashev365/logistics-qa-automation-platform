@@ -8,6 +8,7 @@ import { Given, When, Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 import { CustomWorld } from '../../support/custom-world';
 import { UI_MAP, isValidPageKey, MENU_NAVIGATION } from '../../ui-map';
+import { isVisibleWithin } from '../../utils/wait';
 
 /**
  * URL mapping for page navigation
@@ -21,6 +22,10 @@ const legacyPageUrls: Record<string, string> = {
   'Login': '/web/login',
   'Home': '/web',
 };
+
+function availablePageNames(): string[] {
+  return [...new Set([...Object.keys(UI_MAP.pages), ...Object.keys(legacyPageUrls), ...Object.keys(MENU_NAVIGATION)])];
+}
 
 /**
  * Resolve page URL from UI-MAP key or legacy name
@@ -42,60 +47,20 @@ function resolvePageUrl(pageName: string): string | undefined {
 }
 
 /**
- * Given Odoo is accessible at {string}
- * Verifies Odoo is running and accessible
+ * Given Odoo is accessible
+ * Opens the configured Odoo (BASE_URL) and waits for its login page or web client.
+ * The address is never written in a feature: it would ignore BASE_URL.
  */
-Given('Odoo is accessible at {string}', async function (this: CustomWorld, url: string) {
+Given('Odoo is accessible', { timeout: 30000 }, async function (this: CustomWorld) {
+  const url = this.getBaseUrl();
   try {
-    // Navigate to the base URL
     await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    
+
     // Check for Odoo-specific elements (login page or main app)
     await this.page.locator('.o_web_client, .oe_login_form, .o_login_auth').first().waitFor({ state: 'visible', timeout: 10000 });
-    
-    // Store base URL in test data
-    this.setTestData('baseUrl', url);
-    
   } catch (error) {
-    throw new Error(`Failed to access Odoo at ${url}: ${(error as Error).message}`);
+    throw new Error(`Failed to access Odoo at ${url} (BASE_URL): ${(error as Error).message}`);
   }
-});
-
-/**
- * Given I login with username {string} and password {string}
- * Logs into Odoo with provided credentials
- */
-Given('I login with username {string} and password {string}', { timeout: 30000 }, async function (this: CustomWorld, username: string, password: string) {
-  const baseUrl = this.getTestData<string>('baseUrl') || this.getBaseUrl();
-  
-  // Check if already logged in
-  const isLoggedIn = await this.page.locator('.o_main_navbar').isVisible().catch(() => false);
-  
-  if (isLoggedIn) {
-    return;
-  }
-  
-  // Navigate to login page if not already there
-  const currentUrl = this.page.url();
-  if (!currentUrl.includes('/web/login')) {
-    await this.page.goto(`${baseUrl}/web/login`, { waitUntil: 'domcontentloaded' });
-  }
-  
-  // Wait for login form
-  await this.page.waitForSelector('form.oe_login_form, form[action*="login"]', { timeout: 5000 });
-  
-  // Fill login credentials
-  await this.page.getByRole('textbox', { name: 'Email' }).fill(username);
-  await this.page.getByRole('textbox', { name: 'Password' }).fill(password);
-  
-  // Click login button and wait for navigation
-  await this.page.getByRole('button', { name: 'Log in' }).click();
-  
-  // Wait for main navbar to appear (indicates successful login)
-  await this.page.locator('.o_main_navbar').waitFor({ state: 'visible', timeout: 15000 });
-  
-  this.setTestData('username', username);
-  this.setTestData('isLoggedIn', true);
 });
 
 /**
@@ -111,7 +76,7 @@ When('I navigate to {string} page', { timeout: 30000 }, async function (this: Cu
     const loadsTabSelector = UI_MAP.tablet?.selectors?.navigation?.loadsTab;
     if (loadsTabSelector) {
       const loadsTab = this.page.locator(loadsTabSelector).first();
-      const isLoadsTabVisible = await loadsTab.isVisible({ timeout: 1500 }).catch(() => false);
+      const isLoadsTabVisible = await isVisibleWithin(loadsTab, 1500);
 
       if (isLoadsTabVisible) {
         await loadsTab.click();
@@ -129,13 +94,26 @@ When('I navigate to {string} page', { timeout: 30000 }, async function (this: Cu
     }
   }
 
-  // Check if user is logged in (Home Menu visible means logged in)
-  const isLoggedIn = await this.page.getByTitle('Home Menu').isVisible({ timeout: 1000 }).catch(() => false);
-  
+  // Signed in or not? Right after a login the web client is still rendering, so wait until
+  // either the navbar or the login form is there instead of reading the page at once
+  // (isVisible does not wait). Neither within 5 s (e.g. a blank page) counts as signed out.
+  const homeMenu = this.page.getByTitle('Home Menu');
+  await homeMenu
+    .or(this.page.locator('form.oe_login_form'))
+    .first()
+    .waitFor({ state: 'visible', timeout: 5000 })
+    .catch(() => undefined);
+  const isLoggedIn = await homeMenu.isVisible().catch(() => false);
+
   // If not logged in, use direct URL navigation (for testing unauthorized access)
   if (!isLoggedIn) {
     const baseUrl = this.getTestData<string>('baseUrl') || this.getBaseUrl();
-    const path = resolvePageUrl(pageName) || `/web#model=fleet.vehicle&view_type=list`;
+    const path = resolvePageUrl(pageName);
+    if (!path) {
+      // An unknown name must not silently become the vehicles list: the scenario would test
+      // a page it did not name.
+      throw new Error(`Unknown page: "${pageName}". Available: ${availablePageNames().join(', ')}`);
+    }
     await this.page.goto(`${baseUrl}${path}`, { waitUntil: 'domcontentloaded' });
     return;
   }
@@ -154,13 +132,26 @@ When('I navigate to {string} page', { timeout: 30000 }, async function (this: Cu
   const nav = menuNav || legacyMenuNavigation[pageName];
   
   if (nav) {
+    // Mark the action that is on screen now. Odoo keeps showing it until the new one is
+    // ready, and it can look the same (vehicles list -> vehicles list): without the mark the
+    // wait below would accept the old view, and anything typed into it would be lost.
+    const currentAction = this.page.locator('.o_action_manager > *').first();
+    if ((await currentAction.count()) > 0) {
+      await currentAction.evaluate((el) => el.setAttribute('data-qa-stale', '1'));
+    }
+
     // Navigate via Odoo menu
-    await this.page.getByTitle('Home Menu').click();
+    await homeMenu.click();
     // Use .first() to handle duplicate Fleet menu items in Odoo 17
     await this.page.getByRole('menuitem', { name: nav.app }).first().click();
-    
-    // Wait for list/kanban view to load
-    await this.page.locator('.o_list_view, .o_kanban_view, .o_form_view').first().waitFor({ state: 'visible', timeout: 15000 });
+
+    // Wait until the old action is gone and the new list/kanban/form view is shown
+    await this.page.locator('[data-qa-stale]').waitFor({ state: 'detached', timeout: 10000 });
+    await this.page
+      .locator('.o_action_manager')
+      .locator('.o_list_view, .o_kanban_view, .o_form_view')
+      .first()
+      .waitFor({ state: 'visible', timeout: 10000 });
     
     // If there's a submenu item, click it
     if (nav.menuItem) {
@@ -173,12 +164,7 @@ When('I navigate to {string} page', { timeout: 30000 }, async function (this: Cu
     const path = resolvePageUrl(pageName);
     
     if (!path) {
-      const availablePages = [
-        ...Object.keys(UI_MAP.pages),
-        ...Object.keys(legacyPageUrls),
-        ...Object.keys(MENU_NAVIGATION),
-      ];
-      throw new Error(`Unknown page: "${pageName}". Available: ${[...new Set(availablePages)].join(', ')}`);
+      throw new Error(`Unknown page: "${pageName}". Available: ${availablePageNames().join(', ')}`);
     }
     
     await this.page.goto(`${baseUrl}${path}`, { waitUntil: 'domcontentloaded' });
@@ -245,8 +231,6 @@ When('I click {string} menu item', async function (this: CustomWorld, menuText: 
     // Try generic text match
     await this.page.getByText(menuText).first().click();
   }
-  
-  await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
 });
 
 /**
@@ -306,7 +290,7 @@ Then('the page title should contain {string}', async function (this: CustomWorld
 When('I wait for page to load', async function (this: CustomWorld) {
   await this.page.waitForLoadState('domcontentloaded');
   await this.page.waitForLoadState('load');
-  await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+  // No networkidle: Odoo keeps connections open, so it never arrives.
 });
 
 /**
@@ -314,9 +298,8 @@ When('I wait for page to load', async function (this: CustomWorld) {
  * Waits for Odoo form view to be ready
  */
 When('I wait for form to load', async function (this: CustomWorld) {
-  await this.page.locator('.o_form_view').waitFor({ state: 'visible', timeout: 10000 });
-  // Extra wait for form fields to be initialized
-  await this.page.waitForTimeout(500);
+  // The form's first field is rendered with the form, so waiting for it replaces a fixed pause
+  await this.page.locator('.o_form_view .o_field_widget').first().waitFor({ state: 'visible', timeout: 10000 });
 });
 
 /**

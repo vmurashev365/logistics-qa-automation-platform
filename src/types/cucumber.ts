@@ -60,8 +60,7 @@ export type StepContext = ICustomWorld;
  */
 export interface IBasePage {
   readonly page: Page;
-  waitForPageLoad(): Promise<void>;
-  waitForNetworkIdle(): Promise<void>;
+  waitForPageLoad(): Promise<void>;
 }
 
 /**

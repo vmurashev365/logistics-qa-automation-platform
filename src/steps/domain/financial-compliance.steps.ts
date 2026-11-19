@@ -32,7 +32,7 @@ When('I request salary calculation with:', async function (this: CustomWorld, ta
   const request = parseSalaryRequest(table);
 
   const response = await this.restApi.post<unknown>(env.financeSalaryEndpoint, request);
-  this.lastApiResponse = response;
+  this.lastApiResponse = { kind: 'http', ...response };
 
   this.setTestData('salary_request', request);
 });
@@ -62,7 +62,7 @@ When('I request IFTA calculation with:', async function (this: CustomWorld, tabl
   const request = parseIftaRequest(table);
 
   const response = await this.restApi.post<unknown>(env.financeIftaEndpoint, request);
-  this.lastApiResponse = response;
+  this.lastApiResponse = { kind: 'http', ...response };
 
   this.setTestData('ifta_request', request);
 });

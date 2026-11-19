@@ -151,9 +151,36 @@ export abstract class OdooBasePage extends BasePage {
    */
   async clickSave(): Promise<void> {
     await this.waitForLoadingComplete();
-    const saveBtn = this.page.locator(this.selectors.saveButton);
+    // The form's own save button (a dialog may add another .o_form_button_save)
+    const saveBtn = this.page.locator(`.o_form_status_indicator ${this.selectors.saveButton}`).first();
     await saveBtn.click();
-    await this.waitForLoadingComplete();
+    await this.waitForSaveOutcome();
+  }
+
+  /**
+   * Wait until Odoo has either saved the form or refused to. Saved: the form's status buttons
+   * get the class "invisible" (nothing left to save). Refused: an "Invalid fields" notification
+   * or an error dialog. A refusal or no answer at all fails with what Odoo showed, so a step
+   * never carries on as if the record had been saved.
+   */
+  async waitForSaveOutcome(timeoutMs = 10000): Promise<void> {
+    const saved = this.page.locator('.o_form_view .o_form_status_indicator_buttons.invisible');
+    const invalid = this.page.locator(this.selectors.notification).filter({ hasText: 'Invalid fields' });
+    const errorDialog = this.page.locator('.o_error_dialog, .modal .modal-title:text-matches("error", "i")');
+    try {
+      await saved.or(invalid).or(errorDialog).first().waitFor({ state: 'attached', timeout: timeoutMs });
+    } catch {
+      throw new Error(`Odoo did not confirm the save within ${timeoutMs} ms`);
+    }
+    if ((await saved.count()) === 0) {
+      const shown = [
+        ...(await invalid.allInnerTexts()),
+        ...(await this.page.locator('.modal .modal-body').allInnerTexts()),
+      ]
+        .map((text) => text.replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+      throw new Error(`Odoo did not save the form: ${shown.join(' | ') || 'an error was shown'}`);
+    }
   }
 
   /**
@@ -235,7 +262,22 @@ export abstract class OdooBasePage extends BasePage {
     const searchInput = this.page.locator(this.selectors.searchInput);
     await searchInput.fill(query);
     await searchInput.press('Enter');
+    await this.waitForSearchApplied(query);
     await this.waitForLoadingComplete();
+  }
+
+  /**
+   * Wait until Odoo shows the search term as a facet in the search bar.
+   * A search typed while the view is being replaced is silently dropped; this turns that
+   * into a failure of the search itself instead of a wrong result later.
+   */
+  async waitForSearchApplied(query: string): Promise<void> {
+    const facet = this.page.locator(this.selectors.searchFacet).filter({ hasText: query }).first();
+    try {
+      await facet.waitFor({ state: 'visible', timeout: 5000 });
+    } catch {
+      throw new Error(`Odoo did not apply the search for "${query}": no search facet with this term appeared`);
+    }
   }
 
   /**

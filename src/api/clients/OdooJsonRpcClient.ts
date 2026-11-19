@@ -33,6 +33,7 @@ export class OdooJsonRpcClient {
   private uid?: number;
   private authenticatedDb?: string;
   private context: Record<string, unknown> = {};
+  private authenticationFailure?: Error;
 
   constructor(config: OdooClientConfig | string) {
     if (typeof config === 'string') {
@@ -70,6 +71,7 @@ export class OdooJsonRpcClient {
     if (!response.uid) {
       throw new Error('Authentication failed: Invalid credentials');
     }
+    this.authenticationFailure = undefined;
 
     // Store session info - session_id comes from response body in Odoo
     if (response.session_id) {
@@ -177,7 +179,7 @@ export class OdooJsonRpcClient {
     model: string,
     domain: OdooDomain = [],
     fields: string[] = [],
-    options?: { limit?: number; offset?: number; order?: string }
+    options?: { limit?: number; offset?: number; order?: string; context?: Record<string, unknown> }
   ): Promise<T[]> {
     this.ensureAuthenticated();
 
@@ -187,7 +189,22 @@ export class OdooJsonRpcClient {
       limit: options?.limit,
       offset: options?.offset,
       order: options?.order,
+      ...(options?.context ? { context: { ...this.context, ...options.context } } : {}),
     });
+  }
+
+  /**
+   * Call any public model method, e.g. `export_data`, with the session's user context.
+   */
+  async call<T = unknown>(
+    model: string,
+    method: string,
+    args: unknown[],
+    kwargs: Record<string, unknown> = {}
+  ): Promise<T> {
+    this.ensureAuthenticated();
+
+    return this.callModel<T>(model, method, args, kwargs);
   }
 
   /**
@@ -355,6 +372,10 @@ export class OdooJsonRpcClient {
       attempts: this.retries,
       delay: 1000,
       backoff: 2,
+      // Retry transport failures only. When Odoo itself answers with an error (access denied,
+      // validation, wrong password) a new attempt gets the same answer, and a repeated failed
+      // login also counts towards Odoo's login lockout for this machine.
+      shouldRetry: (error) => !(error instanceof OdooApiError),
       onRetry: (error, attempt) => {
         console.log(`[OdooJsonRpcClient] Retry ${attempt}/${this.retries} for ${endpoint}: ${error.message}`);
       },
@@ -364,8 +385,19 @@ export class OdooJsonRpcClient {
   /**
    * Ensure client is authenticated before making ORM calls
    */
+  /**
+   * Remember why an authentication attempt failed, so later calls report that reason instead of
+   * a bare "not authenticated".
+   */
+  rememberAuthenticationFailure(error: Error): void {
+    this.authenticationFailure = error;
+  }
+
   private ensureAuthenticated(): void {
     if (!this.isAuthenticated()) {
+      if (this.authenticationFailure) {
+        throw new Error(`OdooJsonRpcClient: Odoo login failed earlier: ${this.authenticationFailure.message}`);
+      }
       throw new Error('OdooJsonRpcClient: Not authenticated. Call authenticate() first.');
     }
   }
@@ -379,7 +411,8 @@ export class OdooApiError extends Error {
   public readonly data: OdooError['data'];
 
   constructor(error: OdooError) {
-    super(error.message);
+    // "Odoo Server Error" alone says nothing; Odoo's own message names the cause.
+    super(error.data?.message ? `${error.message}: ${error.data.message}` : error.message);
     this.name = 'OdooApiError';
     this.code = error.code;
     this.data = error.data;

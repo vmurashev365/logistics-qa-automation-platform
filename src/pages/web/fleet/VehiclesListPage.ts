@@ -5,6 +5,7 @@
 
 import { Page } from 'playwright';
 import { OdooBasePage } from '../../base/OdooBasePage';
+import { firstVisible } from '../../../utils/wait';
 
 /**
  * Vehicle data interface
@@ -51,26 +52,15 @@ export class VehiclesListPage extends OdooBasePage {
    * @param baseUrl - Base URL of Odoo instance
    */
   async navigateToVehicles(baseUrl: string): Promise<void> {
-    // Navigate to fleet vehicles
-    const url = `${baseUrl}/web#model=fleet.vehicle`;
+    // Open the Fleet "Vehicles" action and wait for its list or kanban view. (No networkidle:
+    // Odoo keeps connections open, so it never arrives and only burns its timeout.)
+    const url = `${baseUrl}/web#action=fleet.fleet_vehicle_action`;
     await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    
-    // Wait for page to load
-    await this.page.waitForLoadState('networkidle').catch(() => {});
-    
-    // Wait for either list or kanban view to appear with retry
-    const vehiclesView = this.page.locator('.o_kanban_view, .o_kanban_renderer, table.o_list_table, .o_list_view, .o_view_controller');
-    
-    try {
-      await vehiclesView.first().waitFor({ state: 'visible', timeout: 15000 });
-    } catch {
-      // Retry with fresh navigation
-      console.log('  ⟳ Retrying navigation...');
-      await this.page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
-      await vehiclesView.first().waitFor({ state: 'visible', timeout: 15000 });
-    }
-    
-    console.log('  ✓ Vehicles page loaded');
+    await this.page
+      .locator('.o_action_manager')
+      .locator('.o_kanban_view, .o_list_view')
+      .first()
+      .waitFor({ state: 'visible', timeout: 15000 });
   }
 
   /**
@@ -147,63 +137,8 @@ export class VehiclesListPage extends OdooBasePage {
     return await this.page.locator(this.vehicleSelectors.licensePlateInput).inputValue();
   }
 
-  /**
-   * Fill Model field (Many2one with autocomplete)
-   * @param model - Model name to select
-   */
-  async fillModel(model: string): Promise<void> {
-    await this.waitForLoadingComplete();
-    
-    const modelInput = this.page.locator(this.vehicleSelectors.modelSelect);
-    await modelInput.fill(model);
-    
-    // Wait for dropdown and select first option
-    await this.page.waitForTimeout(500);
-    const dropdown = this.page.locator('.o_m2o_dropdown_option').first();
-    if (await dropdown.isVisible()) {
-      await dropdown.click();
-    }
-    
-    await this.waitForLoadingComplete();
-  }
-
-  /**
-   * Fill Driver field (Many2one with autocomplete)
-   * @param driver - Driver name to select
-   */
-  async fillDriver(driver: string): Promise<void> {
-    await this.waitForLoadingComplete();
-    
-    const driverInput = this.page.locator(this.vehicleSelectors.driverSelect);
-    await driverInput.fill(driver);
-    
-    // Wait for dropdown and select first option
-    await this.page.waitForTimeout(500);
-    const dropdown = this.page.locator('.o_m2o_dropdown_option').first();
-    if (await dropdown.isVisible()) {
-      await dropdown.click();
-    }
-    
-    await this.waitForLoadingComplete();
-  }
-
-  /**
-   * Fill vehicle form with data
-   * @param data - Vehicle data object
-   */
-  async fillVehicleForm(data: VehicleData): Promise<void> {
-    if (data.licensePlate) {
-      await this.fillLicensePlate(data.licensePlate);
-    }
-    
-    if (data.model) {
-      await this.fillModel(data.model);
-    }
-    
-    if (data.driver) {
-      await this.fillDriver(data.driver);
-    }
-  }
+  // Model and driver are chosen in VehicleFormPage (chooseModel) and by the driver-assignment
+  // step, which pick the exact suggestion and fail otherwise, never "the first one offered".
 
   /**
    * Save vehicle form
@@ -254,44 +189,24 @@ export class VehiclesListPage extends OdooBasePage {
    */
   async clickVehicleByLicensePlate(licensePlate: string): Promise<void> {
     await this.waitForLoadingComplete();
-    
-    // Try List view first (table rows)
-    const listRow = this.page.locator('.o_data_row').filter({
-      has: this.page.locator(`td:has-text("${licensePlate}")`)
-    }).first();
-    
-    if (await listRow.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await listRow.click();
-      await this.waitForLoadingComplete();
-      return;
+    const escaped = licensePlate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    // Wait for the vehicle in whichever view is shown, preferring: list row, the kanban card's
+    // click area (its text starts with the plate, e.g. "MD-AUDIT-001: Audi/A1"), any kanban card
+    // with the plate. Sample records Odoo shows for an empty model are excluded.
+    const real = '.o_content:not(.o_view_sample_data)';
+    const target = await firstVisible(
+      [
+        this.page.locator(`${real} .o_data_row`).filter({ has: this.page.locator(`td:has-text("${licensePlate}")`) }),
+        this.page.locator(`${real} .o_kanban_record .oe_kanban_global_click`).filter({ hasText: new RegExp(`^${escaped}`) }),
+        this.page.locator(`${real} .o_kanban_record`).filter({ hasText: licensePlate }),
+      ],
+      10000
+    );
+    if (!target) {
+      throw new Error(`Vehicle "${licensePlate}" is not shown in the vehicles list or kanban`);
     }
-    
-    // Try Kanban view - click on the .oe_kanban_global_click area within card
-    // Card text format is "MD-AUDIT-001: Audi/A1" so we search for plate at start
-    const kanbanClickArea = this.page.locator('.o_kanban_record .oe_kanban_global_click').filter({
-      hasText: new RegExp(`^${licensePlate}`)
-    }).first();
-    
-    if (await kanbanClickArea.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await kanbanClickArea.click();
-      await this.waitForLoadingComplete();
-      return;
-    }
-    
-    // Fallback: try any kanban record containing the plate
-    const kanbanCard = this.page.locator('.o_kanban_record').filter({
-      hasText: licensePlate
-    }).first();
-    
-    if (await kanbanCard.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await kanbanCard.click();
-      await this.waitForLoadingComplete();
-      return;
-    }
-    
-    // Last resort: click on any element containing the plate text
-    const anyElement = this.page.locator(`text="${licensePlate}"`).first();
-    await anyElement.click();
+    await target.click();
     await this.waitForLoadingComplete();
   }
 

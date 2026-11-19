@@ -35,9 +35,7 @@ const options = {
   metadata: {
     'App Version': '1.0.0',
     'Test Environment': process.env.NODE_ENV || 'development',
-    'Browser': 'Chromium',
     'Platform': process.platform,
-    'Parallel': 'No',
     'Executed': new Date().toISOString(),
   },
   brandTitle: 'Logistics QA - Test Report',
@@ -45,8 +43,13 @@ const options = {
 };
 
 try {
-  // Generate the report
-  reporter.generate(options);
+  const features = JSON.parse(fs.readFileSync(jsonFile, 'utf8'));
+  if (!Array.isArray(features) || !features.some(feature => feature.elements?.length)) {
+    throw new Error('The Cucumber JSON contains no scenarios.');
+  }
+  if (reporter.generate(options) !== true || fs.statSync(outputFile).size === 0) {
+    throw new Error('The HTML reporter did not produce a report.');
+  }
   console.log('✅ HTML Report generated successfully!');
   console.log(`   Report: ${outputFile}`);
 } catch (error) {

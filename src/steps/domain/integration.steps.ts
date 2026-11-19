@@ -9,6 +9,8 @@ import { expect } from '@playwright/test';
 import { CustomWorld } from '../../support/custom-world';
 import { UI_MAP } from '../../ui-map';
 import { Vehicle } from '../../types/api';
+import { verify } from '../../support/evidence';
+import { firstVisible, isVisibleWithin } from '../../utils/wait';
 
 // =============================================================================
 // Message Verification Steps (UI-MAP pattern)
@@ -72,21 +74,18 @@ When('I search for {string} in search', { timeout: 15000 }, async function (this
 
   let filled = false;
   for (const selector of searchSelectors) {
-    try {
-      const searchInput = this.page.locator(selector).first();
-      if (await searchInput.isVisible({ timeout: 2000 })) {
-        await searchInput.fill(searchTerm);
-        await this.page.keyboard.press('Enter');
-        filled = true;
-        break;
-      }
-    } catch {
-      // Try next selector
+    const searchInput = this.page.locator(selector).first();
+    if (await searchInput.isVisible().catch(() => false)) {
+      await searchInput.fill(searchTerm);
+      await this.page.keyboard.press('Enter');
+      await this.vehiclesListPage.waitForSearchApplied(searchTerm);
+      filled = true;
+      break;
     }
   }
 
   if (!filled) {
-    // Fallback: try search through vehicle list page method
+    // Fallback: the page object's search waits for the search box itself
     await this.vehiclesListPage.searchVehicle(searchTerm);
   }
 
@@ -115,10 +114,10 @@ When('I send authenticated request to search vehicles with plate {string}', { ti
 
   // Search for vehicle
   const vehicle = await this.fleetEndpoints.getVehicleByPlate(plate);
-  
+
   this.lastApiResponse = {
-    status: vehicle ? 200 : 404,
-    headers: {},
+    kind: 'rpc',
+    call: `fleet.vehicle.search_read license_plate = ${plate}`,
     body: vehicle ? [vehicle] : [],
   };
 
@@ -144,10 +143,10 @@ When('I send authenticated request to get vehicle {string}', { timeout: 30000 },
   }
 
   const vehicle = await this.fleetEndpoints.getVehicleByPlate(plate);
-  
+
   this.lastApiResponse = {
-    status: vehicle ? 200 : 404,
-    headers: {},
+    kind: 'rpc',
+    call: `fleet.vehicle.search_read license_plate = ${plate}`,
     body: vehicle,
   };
 
@@ -161,9 +160,12 @@ When('I send authenticated request to get vehicle {string}', { timeout: 30000 },
  * Verifies odometer value in API response
  */
 Then('API response should show odometer {int}', async function (this: CustomWorld, expectedOdometer: number) {
-  const vehicle = this.lastApiResponse?.body as Vehicle | undefined;
-  expect(vehicle).toBeDefined();
-  expect(vehicle?.odometer || 0).toBe(expectedOdometer);
+  const vehicle = (this.lastApiResponse?.body ?? null) as Vehicle | null;
+
+  verify(this, `The API shows odometer ${expectedOdometer}`, [
+    { what: 'vehicle returned', source: 'Odoo JSON-RPC', expected: true, actual: vehicle !== null },
+    { what: 'odometer', source: 'Odoo JSON-RPC', expected: expectedOdometer, actual: vehicle?.odometer ?? null },
+  ]);
 });
 
 /**
@@ -171,11 +173,13 @@ Then('API response should show odometer {int}', async function (this: CustomWorl
  * Verifies driver in API response
  */
 Then('API response should show driver {string}', async function (this: CustomWorld, driverName: string) {
-  const vehicle = this.lastApiResponse?.body as Vehicle | undefined;
-  expect(vehicle).toBeDefined();
-  const driverIdArray = vehicle?.driver_id as [number, string] | undefined;
-  const actualDriver = driverIdArray?.[1] || '';
-  expect(actualDriver).toContain(driverName);
+  const vehicle = (this.lastApiResponse?.body ?? null) as Vehicle | null;
+  const driver = Array.isArray(vehicle?.driver_id) ? vehicle.driver_id[1] : null;
+
+  verify(this, `The API shows driver "${driverName}"`, [
+    { what: 'vehicle returned', source: 'Odoo JSON-RPC', expected: true, actual: vehicle !== null },
+    { what: 'driver', source: 'Odoo JSON-RPC', expected: driverName, actual: driver },
+  ]);
 });
 
 /**
@@ -262,30 +266,31 @@ When('I click on vehicle {string}', { timeout: 15000 }, async function (this: Cu
 });
 
 /**
+ * Odoo 17 forms are editable without an "Edit" button; older versions show one. Checked at once:
+ * the form is already rendered when this runs.
+ */
+async function enterEditModeIfNeeded(world: CustomWorld): Promise<void> {
+  const editBtn = world.page.locator('.o_form_button_edit');
+  if (await editBtn.isVisible().catch(() => false)) {
+    await editBtn.click();
+    await world.page.locator('.o_form_view .o_form_editable').first().waitFor({ state: 'visible', timeout: 5000 });
+  }
+}
+
+/**
  * When I update odometer to {int}
  * Updates odometer when already on vehicle form
  */
 When('I update odometer to {int}', { timeout: 30000 }, async function (this: CustomWorld, odometerValue: number) {
   // Wait for form
   await this.vehicleFormPage.waitForFormReady();
-
-  // Click edit if not in edit mode
-  try {
-    const editBtn = this.page.locator('.o_form_button_edit');
-    if (await editBtn.isVisible({ timeout: 1000 })) {
-      await editBtn.click();
-      await this.page.waitForTimeout(500);
-    }
-  } catch {
-    // Already in edit mode
-  }
+  await enterEditModeIfNeeded(this);
 
   // Update odometer
   await this.vehicleFormPage.fillField('odometer', odometerValue.toString());
 
-  // Save
+  // Save: waits until Odoo has saved, or fails with what Odoo showed
   await this.vehicleFormPage.clickSave();
-  await this.page.waitForTimeout(1000);
 
   this.setTestData('updatedOdometer', odometerValue);
   console.log(`✅ Updated odometer to ${odometerValue}`);
@@ -298,53 +303,39 @@ When('I update odometer to {int}', { timeout: 30000 }, async function (this: Cus
 When('I assign driver {string} via UI', { timeout: 30000 }, async function (this: CustomWorld, driverName: string) {
   // Wait for form to be ready
   await this.vehicleFormPage.waitForFormReady();
+  await enterEditModeIfNeeded(this);
 
-  // Click edit if not in edit mode
-  try {
-    const editBtn = this.page.locator('.o_form_button_edit');
-    if (await editBtn.isVisible({ timeout: 1000 })) {
-      await editBtn.click();
-      await this.page.waitForTimeout(500);
-    }
-  } catch {
-    // Already in edit mode
-  }
+  // A driver this step creates is deleted after the scenario; an existing one is left alone.
+  this.trackNewPartners(driverName, await this.partnerIdsNamed(driverName));
 
-  // Click on Driver field to open dropdown
-  const driverField = this.page.locator('div[name="driver_id"]');
-  await driverField.click();
-  await this.page.waitForTimeout(300);
-
-  // Type driver name to search
+  // Type the driver's name into the Driver field
   const driverInput = this.page.locator('div[name="driver_id"] input');
   await driverInput.fill(driverName);
-  await this.page.waitForTimeout(500);
 
-  // Try to select existing driver or create new one
-  const existingOption = this.page.locator('.o-autocomplete--dropdown-menu .o-autocomplete--dropdown-item').filter({
-    hasText: new RegExp(`^${driverName}$`, 'i')
-  }).first();
-
-  if (await existingOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-    // Select existing driver
-    await existingOption.click();
-  } else {
-    // Look for "Create" option
-    const createOption = this.page.locator('.o-autocomplete--dropdown-menu').getByText(`Create "${driverName}"`).first();
-    if (await createOption.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await createOption.click();
-    } else {
-      // Try clicking first dropdown option
-      const firstOption = this.page.locator('.o-autocomplete--dropdown-menu .o-autocomplete--dropdown-item').first();
-      await firstOption.click();
-    }
+  // Wait for Odoo's suggestions: the existing driver (exact name) or "Create "<name>"".
+  // Never pick another partner: the assignment would look done with the wrong driver.
+  const items = this.page.locator('.o-autocomplete--dropdown-menu .o-autocomplete--dropdown-item');
+  const escaped = driverName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const choice = await firstVisible(
+    [
+      items.filter({ hasText: new RegExp(`^\\s*${escaped}\\s*$`, 'i') }),
+      items.filter({ hasText: `Create "${driverName}"` }),
+    ],
+    8000
+  );
+  if (!choice) {
+    const offered = (await items.allInnerTexts()).map((text) => text.trim());
+    throw new Error(
+      `Odoo offered neither driver "${driverName}" nor to create it. Offered: ${offered.join(', ') || 'nothing'}`
+    );
   }
+  await choice.click();
 
-  await this.page.waitForTimeout(500);
+  // The field shows the driver once Odoo has resolved (or created) the partner
+  await expect(driverInput).toHaveValue(driverName, { timeout: 10000 });
 
-  // Save the form
+  // Save: waits until Odoo has saved, or fails with what Odoo showed
   await this.vehicleFormPage.clickSave();
-  await this.page.waitForTimeout(1000);
 
   this.setTestData('assignedDriver', driverName);
   console.log(`✅ Assigned driver "${driverName}" via UI`);
@@ -434,16 +425,16 @@ When('I delete current vehicle', { timeout: 30000 }, async function (this: Custo
   await deleteOption.waitFor({ state: 'visible', timeout: 5000 });
   await deleteOption.click();
 
-  // Wait for confirmation dialog "Bye-bye, record!"
-  await this.page.waitForTimeout(500);
-
-  // Click Delete button in modal (btn-primary with text "Delete")
+  // Confirmation dialog "Bye-bye, record!": wait for its Delete button (no fixed pause)
   const confirmDeleteBtn = this.page.locator('.modal-footer button.btn-primary:has-text("Delete")');
   await confirmDeleteBtn.waitFor({ state: 'visible', timeout: 5000 });
   await confirmDeleteBtn.click();
 
-  // Wait for navigation back to list
-  await this.page.waitForLoadState('domcontentloaded');
+  // Odoo returns from the form to the list in the current document after the unlink.
+  // Let that transition finish before the next step navigates or searches.
+  const action = this.page.locator('.o_action_manager');
+  await action.locator('.o_form_view').waitFor({ state: 'hidden', timeout: 10000 });
+  await action.locator('.o_kanban_view, .o_list_view').first().waitFor({ state: 'visible', timeout: 10000 });
   console.log('✅ Vehicle deleted via UI');
 });
 
@@ -489,18 +480,22 @@ Then('database vehicle {string} should match API response', { timeout: 10000 }, 
   plate: string
 ) {
   if (!this.dbClient) {
-    console.log('Database client not configured, skipping DB verification');
-    return;
+    throw new Error('Database client not initialized. Ensure DB_ENABLED=true in environment.');
   }
 
   const dbVehicle = await this.dbClient.getVehicleByPlate(plate);
-  const apiVehicle = this.getTestData<Record<string, unknown>>('storedVehicleData');
-  
-  expect(dbVehicle).toBeDefined();
-  expect(apiVehicle).toBeDefined();
-  
-  // Compare key fields
-  expect(dbVehicle?.license_plate).toBe(apiVehicle?.license_plate);
+  const apiVehicle = (this.getTestData<Vehicle | null>('storedVehicleData') ?? null) as Vehicle | null;
+  const m2oId = (value: unknown): number | null => (Array.isArray(value) ? value[0] : null);
+
+  verify(this, `PostgreSQL holds vehicle "${plate}" as the API returned it`, [
+    { what: 'vehicle returned by the API', source: 'Odoo JSON-RPC', expected: true, actual: apiVehicle !== null },
+    { what: 'vehicle row in fleet_vehicle', source: 'PostgreSQL', expected: true, actual: dbVehicle !== null },
+    { what: 'id', source: 'PostgreSQL vs API', expected: apiVehicle?.id ?? null, actual: dbVehicle?.id ?? null },
+    { what: 'license_plate', source: 'PostgreSQL vs API', expected: apiVehicle?.license_plate ?? null, actual: dbVehicle?.license_plate ?? null },
+    { what: 'model_id', source: 'PostgreSQL vs API', expected: m2oId(apiVehicle?.model_id), actual: dbVehicle?.model_id ?? null },
+    { what: 'driver_id', source: 'PostgreSQL vs API', expected: m2oId(apiVehicle?.driver_id), actual: dbVehicle?.driver_id ?? null },
+    { what: 'active', source: 'PostgreSQL vs API', expected: apiVehicle?.active ?? null, actual: dbVehicle?.active ?? null },
+  ]);
 });
 
 // =============================================================================
@@ -523,31 +518,9 @@ Then('API response should return empty results', async function (this: CustomWor
   expect(isEmpty).toBe(true);
 });
 
-/**
- * Then I should not see {string} in vehicle list
- * Verifies vehicle is NOT visible in current list/kanban view
- */
-Then('I should not see {string} in vehicle list', { timeout: 10000 }, async function (
-  this: CustomWorld,
-  plate: string
-) {
-  await this.vehiclesListPage.waitForLoadingComplete();
-  
-  // Check that vehicle is NOT visible in list or kanban
-  const listRow = this.page.locator('.o_data_row').filter({
-    has: this.page.locator(`td:has-text("${plate}")`)
-  }).first();
-  
-  const kanbanCard = this.page.locator('.o_kanban_record').filter({
-    hasText: plate
-  }).first();
-  
-  const listVisible = await listRow.isVisible({ timeout: 1000 }).catch(() => false);
-  const kanbanVisible = await kanbanCard.isVisible({ timeout: 1000 }).catch(() => false);
-  
-  expect(listVisible || kanbanVisible).toBe(false);
-  console.log(`✅ Vehicle "${plate}" is NOT visible in list (as expected)`);
-});
+// "I should not see {string} in vehicle list" was removed: it read the list without waiting,
+// so it passed while the view was still loading. Use: I search for "<plate>" in search,
+// then: the vehicles search for "<plate>" should find no vehicles.
 
 /**
  * Then API response should be empty or archived
@@ -588,16 +561,9 @@ When('I create vehicle via API with plate {string}', { timeout: 30000 }, async f
     odometer: 0,
   });
   
-  this.lastApiResponse = {
-    status: vehicleId ? 200 : 400,
-    headers: {},
-    body: { id: vehicleId, license_plate: plate },
-  };
-  
-  // Store for cleanup
-  const testVehicles = this.getTestData<string[]>('testVehicles') || [];
-  testVehicles.push(plate);
-  this.setTestData('testVehicles', testVehicles);
+  this.lastApiResponse = { kind: 'rpc', call: 'fleet.vehicle.create', body: { id: vehicleId, license_plate: plate } };
+  this.setTestData('lastCreatedVehicleId', vehicleId);
+  this.trackVehicle(plate);
 });
 
 /**
@@ -616,12 +582,8 @@ When('I update vehicle {string} odometer to {int} via API', { timeout: 30000 }, 
   }
   
   const success = await this.fleetEndpoints.updateVehicle(vehicle.id, { odometer });
-  
-  this.lastApiResponse = {
-    status: success ? 200 : 400,
-    headers: {},
-    body: { success, odometer },
-  };
+
+  this.lastApiResponse = { kind: 'rpc', call: `fleet.vehicle.write ${vehicle.id}`, body: { success, odometer } };
 });
 
 /**
@@ -635,26 +597,12 @@ Then('I should see odometer value {string}', { timeout: 10000 }, async function 
   // Look for odometer field value
   const odometerField = this.page.locator('[name="odometer"], [name="odometer_count"]').first();
   
-  if (await odometerField.isVisible({ timeout: 3000 })) {
+  if (await isVisibleWithin(odometerField, 3000)) {
     const actualValue = await odometerField.inputValue();
     expect(actualValue).toContain(expectedValue);
   } else {
     // Fall back to text match
     await expect(this.page.locator(`text=${expectedValue}`)).toBeVisible({ timeout: 5000 });
-  }
-});
-
-/**
- * Then test environment should be clean
- * Verifies test cleanup was successful
- */
-Then('test environment should be clean', async function (this: CustomWorld) {
-  // Verify test vehicles were cleaned up
-  const testVehicles = this.getTestData<string[]>('testVehicles') || [];
-  
-  for (const plate of testVehicles) {
-    const vehicle = await this.fleetEndpoints.getVehicleByPlate(plate);
-    expect(vehicle).toBeFalsy();
   }
 });
 

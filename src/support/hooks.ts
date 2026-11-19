@@ -4,9 +4,9 @@
  */
 
 import { Before, After, BeforeAll, AfterAll, BeforeStep, AfterStep, Status } from '@cucumber/cucumber';
-import { chromium, Browser } from 'playwright';
+import { chromium, firefox, webkit, Browser } from 'playwright';
 import { CustomWorld } from './custom-world';
-import { getEnvConfig } from './env';
+import { getEnvConfig, envBoolean, envInteger } from './env';
 import { OdooJsonRpcClient } from '../api/clients/OdooJsonRpcClient';
 import { RestApiClient } from '../api/clients/RestApiClient';
 import { FleetEndpoints } from '../api/endpoints/FleetEndpoints';
@@ -24,8 +24,38 @@ let stepStartTime: number;
 let currentStepText = '';
 let currentStepIndex = 0;
 let scenarioStartTime = 0;
-const DEBUG_TIMING = process.env.DEBUG_TIMING !== 'false';
-const SLOW_STEP_THRESHOLD_MS = parseInt(process.env.SLOW_STEP_THRESHOLD_MS || '1500', 10);
+const DEBUG_TIMING = envBoolean('DEBUG_TIMING', true);
+const SLOW_STEP_THRESHOLD_MS = envInteger('SLOW_STEP_THRESHOLD_MS', 1500);
+
+/** The test vehicle plate convention: every plate a scenario creates starts with "MD-". */
+const TEST_PLATE = /^MD-/;
+
+interface PickleLike {
+  steps: ReadonlyArray<{
+    text: string;
+    argument?: { dataTable?: { rows: ReadonlyArray<{ cells: ReadonlyArray<{ value: string }> }> } };
+  }>;
+}
+
+/**
+ * Test vehicle plates a scenario names: quoted "MD-..." values in its steps and "MD-..." cells
+ * of its data tables. Prefixes used for searching (e.g. "MD-SEARCH") are names of no vehicle,
+ * so they match nothing.
+ */
+function platesNamedIn(pickle: PickleLike): string[] {
+  const plates = new Set<string>();
+  for (const step of pickle.steps) {
+    for (const match of step.text.matchAll(/"([^"]*)"/g)) {
+      if (TEST_PLATE.test(match[1])) plates.add(match[1]);
+    }
+    for (const row of step.argument?.dataTable?.rows ?? []) {
+      for (const cell of row.cells) {
+        if (TEST_PLATE.test(cell.value.trim())) plates.add(cell.value.trim());
+      }
+    }
+  }
+  return [...plates];
+}
 
 function formatDuration(durationMs: number): string {
   if (durationMs < 1000) {
@@ -43,11 +73,11 @@ BeforeAll(async function () {
   const config = getEnvConfig();
   
   console.log('\n🚀 Launching browser...');
-  console.log(`   Browser: chromium`);
+  console.log(`   Browser: ${config.browser}`);
   console.log(`   Headless: ${config.headless}`);
   console.log(`   Base URL: ${config.baseUrl}`);
   
-  browser = await chromium.launch({
+  browser = await { chromium, firefox, webkit }[config.browser].launch({
     headless: config.headless,
     slowMo: config.slowMo,
   });
@@ -108,66 +138,40 @@ Before({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
 
   // Initialize API Clients
   this.odooApi = new OdooJsonRpcClient(config.baseUrl);
-  this.restApi = new RestApiClient(process.env.REST_BASE_URL || config.baseUrl);
+  this.restApi = new RestApiClient(config.apiBaseUrl);
   
-  // Authenticate Odoo API client
+  this.fleetEndpoints = new FleetEndpoints(this.odooApi);
+
+  // Vehicles this scenario names by plate. Leftovers with these exact plates (from an earlier run
+  // that was interrupted before its After hook) are removed, so the scenario starts from "this
+  // vehicle does not exist". Nothing else is touched: seeded data and the vehicles of scenarios
+  // running in parallel (which name other plates) are left alone.
+  const plates = platesNamedIn(scenario.pickle);
+
   try {
     await this.odooApi.authenticate(config.odooDatabase, config.odooUsername, config.odooPassword);
-    this.fleetEndpoints = new FleetEndpoints(this.odooApi);
     console.log('✅ API clients initialized');
-    
-    // Cleanup test vehicles BEFORE scenario (ensure clean state)
-    try {
-      const testPatterns = ['MD-INT-TEST-%', 'MD-E2E-%', 'MD-AUDIT-%', 'MD-TEST-%', 'MD-DRV-%', 'MD-CTI-%', 'MD-OFF-%', 'MD-API-%', 'MD-BATCH-%', 'MD-CONFLICT-%'];
-      let totalDeleted = 0;
-      
-      for (const pattern of testPatterns) {
-        const vehicles = await this.fleetEndpoints.searchVehiclesByPlate(pattern.replace('%', ''));
-        for (const vehicle of vehicles) {
-          try {
-            const vehicleId = vehicle.id;
-            if (!vehicleId) {
-              continue;
-            }
-
-            // First, delete driver assignment logs to avoid FK constraint
-            const assignmentLogs = await this.odooApi.search('fleet.vehicle.assignation.log', [['vehicle_id', '=', vehicleId]]);
-            if (assignmentLogs.length > 0) {
-              await this.odooApi.unlink('fleet.vehicle.assignation.log', assignmentLogs);
-            }
-            
-            // Delete odometer records
-            const odometerRecords = await this.odooApi.search('fleet.vehicle.odometer', [['vehicle_id', '=', vehicleId]]);
-            if (odometerRecords.length > 0) {
-              await this.odooApi.unlink('fleet.vehicle.odometer', odometerRecords);
-            }
-            
-            // Now delete the vehicle
-            await this.odooApi.unlink('fleet.vehicle', [vehicleId]);
-            totalDeleted++;
-          } catch {
-            // Try archiving if delete fails
-            try {
-              const vehicleId = vehicle.id;
-              if (vehicleId) {
-                await this.odooApi.write('fleet.vehicle', [vehicleId], { active: false });
-              }
-            } catch {
-              // Ignore
-            }
-          }
-        }
-      }
-      
-      if (totalDeleted > 0) {
-        console.log(`🧹 Pre-test cleanup: removed ${totalDeleted} test vehicles`);
-      }
-    } catch (error) {
-      console.log(`⚠️ Pre-test cleanup failed: ${error}`);
+  } catch (error) {
+    const reason = error instanceof Error ? error : new Error(String(error));
+    // Scenarios that never call Odoo (e.g. the HOS calculator) still run; every Odoo call of
+    // this scenario fails with this reason instead of "not authenticated".
+    this.odooApi.rememberAuthenticationFailure(reason);
+    if (plates.length > 0) {
+      throw new Error(`Cannot remove leftover test vehicles: Odoo login failed: ${reason.message}`);
     }
-  } catch {
-    console.log(`⚠️ API authentication deferred (will authenticate on first API step)`);
-    this.fleetEndpoints = new FleetEndpoints(this.odooApi);
+    console.log(`⚠️ Odoo login failed, Odoo steps of this scenario will fail: ${reason.message}`);
+  }
+
+  for (const plate of plates) {
+    const leftovers = await this.fleetEndpoints.findVehiclesByPlateIncludingArchived(plate);
+    for (const vehicle of leftovers) {
+      if (vehicle.id !== undefined) {
+        await this.fleetEndpoints.deleteVehicleAndHistory(vehicle.id);
+      }
+    }
+    if (leftovers.length > 0) {
+      console.log(`🧹 Removed ${leftovers.length} leftover vehicle(s) with plate ${plate}`);
+    }
   }
 
   // Initialize Database Client (if enabled)
@@ -211,6 +215,7 @@ Before({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
   // Clear test data from previous scenario
   this.clearTestData();
   scenarioStartTime = Date.now();
+  this.setTestData('scenarioStartedAt', scenarioStartTime);
   currentStepIndex = 0;
   currentStepText = '';
 
@@ -221,7 +226,7 @@ Before({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
  * After Hook
  * Handles cleanup, screenshots on failure, and resource disposal
  */
-After(async function (this: CustomWorld, scenario) {
+After({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
   const config = getEnvConfig();
 
   // Take screenshot on failure
@@ -284,34 +289,28 @@ After(async function (this: CustomWorld, scenario) {
     }
   }
 
-  // Cleanup test vehicles created during this scenario
+  // Cleanup test vehicles created during this scenario. First: the cleanups registered below
+  // delete drivers, which the vehicles' driver history still references.
   const testVehicles = this.getTestData<string[]>('testVehicles') || [];
   if (testVehicles.length > 0 && this.fleetEndpoints && this.odooApi) {
-    try {
-      for (const plate of testVehicles) {
-        const vehicle = await this.fleetEndpoints.getVehicleByPlate(plate);
-        if (vehicle?.id) {
-          // First, delete driver assignment logs to avoid FK constraint
-          const assignmentLogs = await this.odooApi.search('fleet.vehicle.assignation.log', [['vehicle_id', '=', vehicle.id]]);
-          if (assignmentLogs.length > 0) {
-            await this.odooApi.unlink('fleet.vehicle.assignation.log', assignmentLogs);
+    for (const plate of testVehicles) {
+      try {
+        // Archived ones too, with the history that blocks unlink
+        const vehicles = await this.fleetEndpoints.findVehiclesByPlateIncludingArchived(plate);
+        for (const vehicle of vehicles) {
+          if (vehicle.id !== undefined) {
+            await this.fleetEndpoints.deleteVehicleAndHistory(vehicle.id);
+            console.log(`🗑️ Cleanup: deleted test vehicle ${plate}`);
           }
-          
-          // Delete odometer records
-          const odometerRecords = await this.odooApi.search('fleet.vehicle.odometer', [['vehicle_id', '=', vehicle.id]]);
-          if (odometerRecords.length > 0) {
-            await this.odooApi.unlink('fleet.vehicle.odometer', odometerRecords);
-          }
-          
-          // Now delete the vehicle
-          await this.fleetEndpoints.deleteVehicle(vehicle.id);
-          console.log(`🗑️ Cleanup: deleted test vehicle ${plate}`);
         }
+      } catch (error) {
+        console.log(`⚠️ Test vehicle cleanup failed for ${plate}: ${error}`);
       }
-    } catch (error) {
-      console.log(`⚠️ Test vehicle cleanup failed: ${error}`);
     }
   }
+
+  // Undo what the scenario registered (drivers it created, Odoo settings it changed)
+  await this.runCleanups();
 });
 
 /**

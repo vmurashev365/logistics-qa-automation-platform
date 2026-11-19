@@ -5,8 +5,7 @@
  * Normalizes Odoo's native liters/pricing into trucking-friendly gallons.
  */
 
-import { OdooJsonRpcClient } from '../../clients/OdooJsonRpcClient';
-import { OdooApiError } from '../../clients/OdooJsonRpcClient';
+import { OdooApiError, OdooJsonRpcClient } from '../../clients/OdooJsonRpcClient';
 import type { CreateFuelLogInput, FuelLog, IsoDateString } from '../../../types/fleet';
 import { dollarsToCents, mulToCents } from '../../../helpers/money';
 

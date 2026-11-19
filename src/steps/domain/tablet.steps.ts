@@ -28,6 +28,7 @@ import {
   TabletConstants,
 } from '../../ui-map/tablet';
 import { CUSTOM_DEVICES, DEVICE_VIEWPORTS } from '../../../playwright.config';
+import { firstVisible } from '../../utils/wait';
 
 // ============================================
 // Device Context Steps
@@ -244,9 +245,7 @@ Then(
     const isVisible = await locator.isVisible().catch(() => false);
     
     if (!isVisible) {
-      // Element might not be visible in current context, store for later check
-      console.warn(`Element "${elementName}" not visible, marking for future verification`);
-      return;
+      throw new Error(`Element "${elementName}" is not visible, so its thumb-zone position cannot be checked`);
     }
 
     await assertInThumbZone(locator);
@@ -343,33 +342,6 @@ Then(
   }
 );
 
-/**
- * Assert form data is preserved after orientation change.
- * 
- * @example
- * Then all form data should be preserved
- */
-Then(
-  'all form data should be preserved',
-  async function (this: CustomWorld) {
-    // Get previously stored form values
-    const licensePlate = this.getTestData<string>('licensePlate') || 'MD-ORIENT-001';
-    const model = this.getTestData<string>('model') || 'Freightliner Cascadia';
-
-    // Verify values are still present
-    const plateField = this.page.locator('[name="license_plate"], input[placeholder*="License"]');
-    const modelField = this.page.locator('[name="model_id"], [name="model"]');
-
-    if (await plateField.isVisible()) {
-      await expect(plateField).toHaveValue(licensePlate);
-    }
-    
-    if (await modelField.isVisible()) {
-      await expect(modelField).toHaveValue(model);
-    }
-  }
-);
-
 // ============================================
 // Keyboard Handling Steps
 // ============================================
@@ -416,30 +388,21 @@ Then(
  */
 Then(
   'the {string} button should be visible',
+  { timeout: 15000 },
   async function (this: CustomWorld, buttonText: string) {
-    // Try multiple Odoo button selectors
-    const selectors = [
+    // Odoo button selectors, and the button's accessible name (Odoo 17 icon buttons such as
+    // "Discard" have no text, only an aria-label). All are awaited together.
+    const candidates = [
       `button:has-text("${buttonText}")`,
       `button span:has-text("${buttonText}")`,
       `.o_form_button_save:has-text("${buttonText}")`,
       `[name="action_save"]:has-text("${buttonText}")`,
       `.btn:has-text("${buttonText}")`,
-    ];
-    
-    let found = false;
-    for (const selector of selectors) {
-      const button = this.page.locator(selector).first();
-      if (await button.isVisible({ timeout: 1000 }).catch(() => false)) {
-        found = true;
-        break;
-      }
-    }
-    
-    if (!found) {
-      // Fallback: use getByRole which is more resilient
-      const roleButton = this.page.getByRole('button', { name: buttonText });
-      await expect(roleButton.first()).toBeVisible({ timeout: 5000 });
-    }
+    ].map((selector) => this.page.locator(selector));
+    candidates.push(this.page.getByRole('button', { name: buttonText }));
+
+    const button = await firstVisible(candidates, 8000);
+    expect(button !== null, `button "${buttonText}" visible`).toBe(true);
   }
 );
 

@@ -31,7 +31,7 @@ When('I go back online', async function (this: CustomWorld) {
   await this.context.setOffline(false);
 });
 
-When('I mark delivered and upload POD (should queue)', { timeout: 60000 }, async function (this: CustomWorld) {
+When(/^I mark delivered and upload POD \(should queue\)$/, { timeout: 60000 }, async function (this: CustomWorld) {
   const env = getOfflineSyncEnv();
 
   this.restApi.setBaseUrl(env.apiBaseUrl);

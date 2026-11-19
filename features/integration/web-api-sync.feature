@@ -5,8 +5,8 @@ Feature: Web UI and API Data Consistency
   So that users see the same data regardless of interface
 
   Background:
-    Given Odoo is accessible at "http://localhost:8069"
-    And I login with username "admin" and password "admin"
+    Given Odoo is accessible
+    And I am logged in as admin
     And Odoo API is authenticated
 
   @critical @sync-001
@@ -15,31 +15,10 @@ Feature: Web UI and API Data Consistency
     When I create vehicle via API with:
       | license_plate | MD-SYNC-001 |
       | active        | true        |
-    Then API response status should be 200
-    
+
     # Verify in Web UI
     When I navigate to "Vehicles" page
     Then I should see "MD-SYNC-001" text
-    
-    # Cleanup via API
-    When I delete vehicle with plate "MD-SYNC-001" via API
-    Then API response status should be 200
-
-  @critical @sync-002
-  Scenario: Vehicle created via API appears in UI second check
-    # Create vehicle via API
-    When I create vehicle via API with:
-      | license_plate | MD-SYNC-002 |
-      | active        | true        |
-    Then API response status should be 200
-    
-    # Verify in Web UI
-    When I navigate to "Vehicles" page
-    Then I should see "MD-SYNC-002" text
-    
-    # Cleanup via API
-    When I delete vehicle with plate "MD-SYNC-002" via API
-    Then API response status should be 200
 
   @sync-003
   Scenario: Vehicle deleted via API disappears from UI
@@ -47,27 +26,23 @@ Feature: Web UI and API Data Consistency
     When I create vehicle via API with:
       | license_plate | MD-SYNC-003 |
       | active        | true        |
-    Then API response status should be 200
-    
+
     # Verify it appears in UI
     When I navigate to "Vehicles" page
     Then I should see "MD-SYNC-003" text
-    
+
     # Delete via API
     When I delete vehicle with plate "MD-SYNC-003" via API
-    Then API response status should be 200
-    
-    # Refresh and verify gone from UI
-    When I navigate to "Vehicles" page
-    Then I should not see "MD-SYNC-003" text
 
-  @sync-004
-  Scenario: Count vehicles matches between UI and API
-    # Get count via API
-    When I get list of vehicles via API
-    Then API response status should be 200
-    And API response should be a valid JSON array
-    
-    # Navigate to UI and verify list is shown
+    # Refresh and verify gone from UI: wait for Odoo's "no records" answer to the search
     When I navigate to "Vehicles" page
-    Then I should see "Vehicles" text
+    And I search for "MD-SYNC-003" in search
+    Then the vehicles search for "MD-SYNC-003" should find no vehicles
+
+  # Counts every vehicle in Odoo, so it must not run next to scenarios that create or delete
+  # vehicles: @serial keeps it alone in a parallel run.
+  @sync-004 @serial
+  Scenario: Count vehicles matches between UI and API
+    When I get list of vehicles via API
+    And I navigate to "Vehicles" page
+    Then the vehicles list view should count as many vehicles as the API returned

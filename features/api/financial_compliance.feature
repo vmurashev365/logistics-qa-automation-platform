@@ -1,4 +1,4 @@
-@api @integration @module_finance
+@api @integration @module_finance @external-service
 Feature: Financial Compliance
   As a compliance system
   I want finance calculations to be correct

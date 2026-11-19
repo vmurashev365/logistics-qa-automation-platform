@@ -11,6 +11,7 @@ import type { CustomWorld } from '../../support/custom-world';
 import type { FuelLog, FleetVehicle, InspectionLog, InspectionResult } from '../../types/fleet';
 import { toCents } from '../../helpers/money';
 import { withRunSuffix } from '../../helpers/test-run';
+import { FleetVehicleModel } from '../../api/models/fleet/FleetVehicleModel';
 
 const TESTDATA_KEYS = {
   vehicle: 'fleet:vehicle',
@@ -28,14 +29,18 @@ function parseInspectionResult(value: string): InspectionResult {
 Given('a fleet vehicle {string} exists', { timeout: 30000 }, async function (this: CustomWorld, name: string) {
   const resolvedName = withRunSuffix(name);
 
-  const vehicle = await this.fleet.vehicle.ensureExists({
+  // Deterministic plate ("Truck-01" -> "TRUCK-01"): an existing vehicle is reused, a vehicle
+  // created here is deleted after the scenario together with its fuel and inspection logs.
+  const { vehicle, created } = await this.fleet.vehicle.ensureExists({
     name: resolvedName,
-    // Provide a deterministic plate so repeated runs are stable.
-    licensePlate: resolvedName.toUpperCase().replace(/\s+/g, '-'),
+    licensePlate: FleetVehicleModel.licensePlateFor(resolvedName),
     odometer: 0,
     odometerUnit: 'miles',
     active: true,
   });
+  if (created) {
+    this.trackVehicle(vehicle.licensePlate);
+  }
 
   this.setTestData<FleetVehicle>(TESTDATA_KEYS.vehicle, vehicle);
 });
@@ -48,7 +53,7 @@ When(
 
     const vehicle =
       this.getTestData<FleetVehicle>(TESTDATA_KEYS.vehicle) ??
-      (await this.fleet.vehicle.getByName(resolvedVehicleName));
+      (await this.fleet.vehicle.getByLicensePlate(FleetVehicleModel.licensePlateFor(resolvedVehicleName)));
 
     const fuelLog = await this.fleet.fuel.createFuelLog({
       vehicleId: vehicle.id,
@@ -67,7 +72,7 @@ When(
     const resolvedVehicleName = withRunSuffix(vehicleName);
     const vehicle =
       this.getTestData<FleetVehicle>(TESTDATA_KEYS.vehicle) ??
-      (await this.fleet.vehicle.getByName(resolvedVehicleName));
+      (await this.fleet.vehicle.getByLicensePlate(FleetVehicleModel.licensePlateFor(resolvedVehicleName)));
 
     await this.fleet.vehicle.updateOdometer(vehicle.id, miles);
 
@@ -84,7 +89,7 @@ Then(
 
     const vehicle =
       this.getTestData<FleetVehicle>(TESTDATA_KEYS.vehicle) ??
-      (await this.fleet.vehicle.getByName(resolvedVehicleName));
+      (await this.fleet.vehicle.getByLicensePlate(FleetVehicleModel.licensePlateFor(resolvedVehicleName)));
     const created = this.getTestData<FuelLog>(TESTDATA_KEYS.fuelLog);
 
     expect(created, 'Expected a fuel log to be created during scenario').toBeTruthy();
@@ -110,7 +115,7 @@ When(
 
     const vehicle =
       this.getTestData<FleetVehicle>(TESTDATA_KEYS.vehicle) ??
-      (await this.fleet.vehicle.getByName(resolvedVehicleName));
+      (await this.fleet.vehicle.getByLicensePlate(FleetVehicleModel.licensePlateFor(resolvedVehicleName)));
     const result = parseInspectionResult(resultRaw);
 
     const inspection = await this.fleet.inspection.createInspection(vehicle.id, result);

@@ -76,19 +76,30 @@ export class CtiWebSocketMock {
   }
 }
 
-function buildMatcher(pattern: string): string | RegExp {
-  const trimmed = pattern.trim();
+/**
+ * A regex literal is "/body/flags" where the body has no unescaped "/" and the flags are valid
+ * JavaScript regex flags, e.g. /wss:\/\/.*\/cti/. Anything else is a URL fragment with optional
+ * "*" wildcards, e.g. /ws/cti or wss://*\/cti, matched anywhere in the WebSocket URL.
+ * (Before, "/ws/cti" was read as the regex /ws/ with flags "cti" and threw a SyntaxError.)
+ */
+const REGEX_LITERAL = /^\/((?:\\.|[^\\/])+)\/([dgimsuvy]*)$/;
 
-  // Regex literal support: /.../flags
-  if (trimmed.startsWith('/') && trimmed.lastIndexOf('/') > 0) {
-    const lastSlash = trimmed.lastIndexOf('/');
-    const body = trimmed.slice(1, lastSlash);
-    const flags = trimmed.slice(lastSlash + 1);
-    return new RegExp(body, flags);
+export function buildMatcher(pattern: string): RegExp {
+  const trimmed = pattern.trim();
+  if (!trimmed) {
+    throw new Error('CTI_WS_PATTERN is empty');
   }
 
-  // Wildcard support
+  const literal = REGEX_LITERAL.exec(trimmed);
+  if (literal) {
+    const [, body, flags] = literal;
+    if (new Set(flags).size === flags.length) {
+      return new RegExp(body, flags);
+    }
+  }
+
+  // URL fragment with wildcards
   const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regexBody = escaped.replace(/\*/g, '.*');
+  const regexBody = escaped.replace(/\\\*/g, '.*');
   return new RegExp(regexBody);
 }

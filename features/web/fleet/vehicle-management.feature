@@ -1,37 +1,39 @@
 @web @fleet @vehicle-management
 Feature: Vehicle Management
   As a Fleet Manager
-  I want to manage vehicles
-  So that I can track the company fleet
+  I want to register vehicles in Odoo Fleet
+  So that every vehicle of the company fleet has a record
 
   Background:
-    Given Odoo is accessible at "http://localhost:8069"
+    Given Odoo is accessible
     And I am logged in as admin
     And I navigate to "vehicles" page
 
   @smoke @critical
-  Scenario: Create vehicle with minimum required fields
+  Scenario: A vehicle with a license plate and a model is saved
     When I click "create" button
-    And I fill "licensePlate" with "MD-TEST-001"
+    And I fill "licensePlate" with "MD-WEB-001"
+    And I choose vehicle model "Audi/A1"
     And I click "save" button
-    Then I should see "Vehicles" text
+    Then vehicle "MD-WEB-001" should be saved in Odoo with model "Audi/A1"
 
   @crud
-  Scenario: Create vehicle with license plate and model
+  Scenario: A vehicle without a model is not saved
     When I click "create" button
-    And I fill "licensePlate" with "MD-TEST-002"
-    And I fill "model" with "Volvo"
+    And I fill "licensePlate" with "MD-WEB-002"
     And I click "save" button
-    Then I should see "Vehicles" text
+    Then Odoo should refuse to save the vehicle because "Model" is missing
+    And no vehicle "MD-WEB-002" should exist in Odoo
 
   @smoke
   Scenario: Navigate to vehicles list
     When I navigate to "vehicles" page
-    Then I should see "Vehicles" text
+    Then the vehicles list should be shown
 
   @crud
-  Scenario: Discard vehicle creation
+  Scenario: Discarding a new vehicle saves nothing
     When I click "create" button
     And I fill "licensePlate" with "MD-DISCARD-001"
     And I click "discard" button
-    Then I should see "New Request" text
+    Then the vehicles list should be shown
+    And no vehicle "MD-DISCARD-001" should exist in Odoo

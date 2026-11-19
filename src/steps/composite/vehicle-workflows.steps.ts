@@ -11,10 +11,11 @@
  *   When I perform vehicle inspection for "MD-TEST-001"
  */
 
-import { When, Then, Given, DataTable } from '@cucumber/cucumber';
+import { When, Then, DataTable } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 import { CustomWorld } from '../../support/custom-world';
 import { getEnvConfig } from '../../support/env';
+import { verify } from '../../support/evidence';
 
 // ============================================
 // HELPER FUNCTIONS
@@ -92,9 +93,7 @@ When(
     console.log('  5. Clicking save button...');
     await this.vehicleFormPage.clickSave();
     console.log('  5. ✓ Save button clicked');
-    
-    // Wait for save to complete
-    await this.page.waitForTimeout(1000);
+
 
     // Store the registered plate for later assertions
     this.setTestData('registeredVehicle', plate);
@@ -127,7 +126,6 @@ When(
 
     // Save the vehicle
     await this.vehicleFormPage.clickSave();
-    await this.page.waitForTimeout(1000);
 
     this.setTestData('registeredVehicle', plate);
     this.setTestData('vehicleDetails', details);
@@ -156,7 +154,6 @@ When(
 
     // Save changes
     await this.vehicleFormPage.clickSave();
-    await this.page.waitForTimeout(1000);
 
     this.setTestData('assignedDriver', driverName);
     console.log(`✅ Assigned driver "${driverName}" to vehicle "${plate}"`);
@@ -216,7 +213,6 @@ When(
 
     // Save
     await this.vehicleFormPage.clickSave();
-    await this.page.waitForTimeout(1000);
 
     this.setTestData('updatedOdometer', odometerValue);
     console.log(`✅ Updated odometer for "${plate}" to ${odometerValue}`);
@@ -278,37 +274,17 @@ Then(
     const vehicleRow = this.vehiclesListPage.getVehicleByPlate(plate);
     await expect(vehicleRow).toBeVisible({ timeout: 10000 });
 
-    // 2. Verify via API (if available)
-    if (this.fleetEndpoints) {
-      try {
-        const vehicles = await this.fleetEndpoints.getVehicles([
-          ['license_plate', '=', plate]
-        ]);
-        if (!vehicles || vehicles.length === 0) {
-          console.log(`⚠️ API: Vehicle "${plate}" not found via API`);
-        } else {
-          console.log(`✅ API: Vehicle "${plate}" found`);
-        }
-      } catch (error) {
-        console.log(`⚠️ API verification skipped: ${error}`);
-      }
+    // 2. Verify via API and in the database; both layers are required
+    if (!this.dbClient) {
+      throw new Error('Database client not initialized. Ensure DB_ENABLED=true in environment.');
     }
+    const vehicles = await this.fleetEndpoints.getVehicles([['license_plate', '=', plate]]);
+    const inDatabase = await this.dbClient.vehicleExists(plate);
 
-    // 3. Verify in database (if available)
-    if (this.dbClient) {
-      try {
-        const exists = await this.dbClient.vehicleExists(plate);
-        if (!exists) {
-          console.log(`⚠️ DB: Vehicle "${plate}" not found in database`);
-        } else {
-          console.log(`✅ DB: Vehicle "${plate}" found`);
-        }
-      } catch (error) {
-        console.log(`⚠️ DB verification skipped: ${error}`);
-      }
-    }
-
-    console.log(`✅ Cross-layer verification complete for: ${plate}`);
+    verify(this, `Vehicle "${plate}" exists in every layer`, [
+      { what: 'active vehicles with this plate', source: 'Odoo JSON-RPC', expected: 1, actual: vehicles.length },
+      { what: 'active row in fleet_vehicle', source: 'PostgreSQL', expected: true, actual: inDatabase },
+    ]);
   }
 );
 
@@ -337,7 +313,6 @@ When(
           await this.vehicleFormPage.waitForFormReady();
           await this.vehicleFormPage.fillLicensePlate(plate);
           await this.vehicleFormPage.clickSave();
-          await this.page.waitForTimeout(500);
         }
         
         createdPlates.push(plate);
@@ -351,86 +326,6 @@ When(
   }
 );
 
-// ============================================
-// TEST DATA SETUP
-// ============================================
-
-Given(
-  'vehicle {string} has driver {string}',
-  async function (this: CustomWorld, plate: string, driverName: string) {
-    // Try to set up via API first
-    if (this.fleetEndpoints) {
-      try {
-        // Search for existing vehicle
-        const vehicles = await this.fleetEndpoints.getVehicles([
-          ['license_plate', '=', plate]
-        ]);
-
-        if (vehicles && vehicles.length > 0) {
-          // Vehicle exists, just store the relationship
-          this.setTestData(`vehicle_${plate}_driver`, driverName);
-          console.log(`✅ Precondition: Vehicle "${plate}" has driver "${driverName}"`);
-          return;
-        }
-      } catch {
-        // API not available, continue
-      }
-    }
-
-    // Store the relationship for later verification
-    this.setTestData(`vehicle_${plate}_driver`, driverName);
-    console.log(`📝 Noted: Vehicle "${plate}" has driver "${driverName}" (setup pending)`);
-  }
-);
-
-Given(
-  'driver {string} has phone {string}',
-  async function (this: CustomWorld, driverName: string, phone: string) {
-    // Store driver-phone mapping for CTI tests
-    this.setTestData(`driver_${driverName}_phone`, phone);
-    this.setTestData(`phone_${phone}_driver`, driverName);
-    console.log(`📝 Noted: Driver "${driverName}" has phone "${phone}"`);
-  }
-);
-
-// ============================================
-// CLEANUP WORKFLOWS
-// ============================================
-
-When(
-  'I cleanup test vehicles with prefix {string}',
-  async function (this: CustomWorld, prefix: string) {
-    const pattern = `${prefix}%`;
-
-    // Try database cleanup first (faster)
-    if (this.dbClient) {
-      try {
-        const count = await this.dbClient.archiveTestVehicles(pattern);
-        console.log(`🗑️ Archived ${count} vehicles matching "${pattern}"`);
-        return;
-      } catch (error) {
-        console.log(`⚠️ DB cleanup failed, trying API: ${error}`);
-      }
-    }
-
-    // Try API cleanup
-    if (this.fleetEndpoints) {
-      try {
-        const vehicles = await this.fleetEndpoints.getVehicles([
-          ['license_plate', 'like', pattern]
-        ]);
-        
-        if (vehicles) {
-          for (const vehicle of vehicles) {
-            if (vehicle.id !== undefined) {
-              await this.fleetEndpoints.deleteVehicle(vehicle.id);
-            }
-          }
-          console.log(`🗑️ Deleted ${vehicles.length} vehicles via API`);
-        }
-      } catch (error) {
-        console.log(`⚠️ API cleanup failed: ${error}`);
-      }
-    }
-  }
-);
+// Cleanup: each scenario removes what it created (After hook) and the leftovers of the plates
+// it names (Before hook). There is no "clean up everything with a prefix" step: run in
+// parallel, it would delete the vehicles of scenarios that are still running.

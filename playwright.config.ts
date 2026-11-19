@@ -98,9 +98,8 @@ export default defineConfig({
   
   // Reporter configuration
   reporter: [
-    ['html', { outputFolder: 'playwright-report' }],
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
     ['list'],
-    ['allure-playwright', { outputFolder: 'allure-results' }],
   ],
   
   // Shared settings for all projects

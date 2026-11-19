@@ -13,6 +13,17 @@ export interface HttpResponse<T = unknown> {
   body: T;
 }
 
+/**
+ * What an API step last received.
+ *
+ * `http` is a real HTTP response with the status the server sent.
+ * `rpc` is the result of an Odoo JSON-RPC call made through OdooJsonRpcClient: the client either
+ * returns the result or throws, so there is no status to check, only the returned value.
+ */
+export type ApiResult =
+  | ({ kind: 'http' } & HttpResponse)
+  | { kind: 'rpc'; call: string; body: unknown };
+
 export interface HttpRequestOptions {
   headers?: Record<string, string>;
   timeout?: number;

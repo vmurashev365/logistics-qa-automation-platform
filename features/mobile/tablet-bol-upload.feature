@@ -1,18 +1,19 @@
 @tablet @critical @module_loads
+# Scenarios tagged @wip still need step definitions; the Fleet form scenario is implemented.
 Feature: Tablet BOL Upload
   As a fleet driver or owner-operator
   I want to upload Bill of Lading documents from my tablet
   So that I can digitize paperwork while on the road
 
   Background:
-    Given Odoo is accessible at "http://localhost:8069"
-    And I login with username "admin" and password "admin"
+    Given Odoo is accessible
+    And I am logged in as admin
 
   # ========================================
   # BOL Photo Upload Scenarios
   # ========================================
 
-  @galaxy-tab @camera @smoke
+  @galaxy-tab @camera @smoke @wip
   Scenario: BOL photo upload on Galaxy Tab from camera
     Given I am using "galaxy-tab" device
     And I navigate to "loads" page
@@ -27,7 +28,7 @@ Feature: Tablet BOL Upload
     Then I should see "BOL uploaded successfully" message
     And the BOL should be attached to the load
 
-  @ipad-mini @camera @smoke
+  @ipad-mini @camera @smoke @wip
   Scenario: BOL photo upload on iPad Mini from camera
     Given I am using "ipad-mini" device
     And I navigate to "loads" page
@@ -41,7 +42,7 @@ Feature: Tablet BOL Upload
     When I click "Upload" button
     Then I should see "BOL uploaded successfully" message
 
-  @galaxy-tab @gallery
+  @galaxy-tab @gallery @wip
   Scenario: BOL upload from device gallery
     Given I am using "galaxy-tab" device
     And I navigate to "loads" page
@@ -57,7 +58,7 @@ Feature: Tablet BOL Upload
   # Touch Target Accessibility
   # ========================================
 
-  @galaxy-tab @accessibility @glove-mode
+  @galaxy-tab @accessibility @glove-mode @wip
   Scenario: Touch targets meet minimum size for glove usage
     Given I am using "galaxy-tab" device
     And I navigate to "loads" page
@@ -67,7 +68,7 @@ Feature: Tablet BOL Upload
     And the "Accept Load" button should be at least 48px
     And the "Decline Load" button should be at least 48px
 
-  @ipad-mini @accessibility
+  @ipad-mini @accessibility @wip
   Scenario: Touch targets meet minimum size on iPad
     Given I am using "ipad-mini" device
     And I navigate to "loads" page
@@ -75,7 +76,7 @@ Feature: Tablet BOL Upload
     Then touch targets should be at least 48px
     And interactive elements should have 8px spacing
 
-  @galaxy-tab @accessibility @thumb-zone
+  @galaxy-tab @accessibility @thumb-zone @wip
   Scenario: Primary actions are in thumb-reachable zone
     Given I am using "galaxy-tab" device
     And I navigate to "loads" page
@@ -84,7 +85,7 @@ Feature: Tablet BOL Upload
     And element "Upload BOL" should be in thumb-reachable zone
     And element "navigation" should be in thumb-reachable zone
 
-  @ipad-mini @accessibility @thumb-zone
+  @ipad-mini @accessibility @thumb-zone @wip
   Scenario: Primary actions in thumb zone for portrait iPad
     Given I am using "ipad-mini" device
     And I navigate to "loads" page
@@ -96,7 +97,7 @@ Feature: Tablet BOL Upload
   # Keyboard Overlay Handling
   # ========================================
 
-  @galaxy-tab @keyboard
+  @galaxy-tab @keyboard @wip
   Scenario: Form remains visible when keyboard appears on Galaxy Tab
     Given I am using "galaxy-tab" device
     And I navigate to "loads" page
@@ -108,7 +109,7 @@ Feature: Tablet BOL Upload
     When I type "Driver note: Arrived at pickup location"
     Then the text should be visible in the input field
 
-  @ipad-mini @keyboard
+  @ipad-mini @keyboard @wip
   Scenario: Form scrolls to keep input visible on iPad
     Given I am using "ipad-mini" device
     And I navigate to "drivers" page
@@ -122,7 +123,7 @@ Feature: Tablet BOL Upload
     Then form should remain visible above keyboard
     And the "Save" button should remain accessible
 
-  @tablet @keyboard @scrolling
+  @tablet @keyboard @scrolling @wip
   Scenario: Long form scrolls properly with keyboard open
     Given I am using "galaxy-tab" device
     And I navigate to "vehicles" page
@@ -138,7 +139,7 @@ Feature: Tablet BOL Upload
   # Offline Upload Queue
   # ========================================
 
-  @galaxy-tab @offline @critical
+  @galaxy-tab @offline @critical @wip
   Scenario: BOL queued for upload in offline mode
     Given I am using "galaxy-tab" device
     And I navigate to "loads" page
@@ -153,7 +154,7 @@ Feature: Tablet BOL Upload
     And the offline queue should show 1 pending item
     And the sync indicator should show "Offline"
 
-  @galaxy-tab @offline @sync
+  @galaxy-tab @offline @sync @wip
   Scenario: Queued uploads sync when back online
     Given I am using "galaxy-tab" device
     And I have 3 pending uploads in the offline queue
@@ -165,7 +166,7 @@ Feature: Tablet BOL Upload
     Then the offline queue should be empty
     And I should see "All documents synced" message
 
-  @ipad-mini @offline @rural
+  @ipad-mini @offline @rural @wip
   Scenario: Multiple documents queued during rural coverage gap
     Given I am using "ipad-mini" device
     And I navigate to "loads" page
@@ -180,7 +181,7 @@ Feature: Tablet BOL Upload
     Then the offline queue should process remaining items
     And all documents should be uploaded successfully
 
-  @tablet @offline @retry
+  @tablet @offline @retry @wip
   Scenario: Failed upload retries automatically
     Given I am using "galaxy-tab" device
     And I have a pending upload that failed
@@ -190,7 +191,7 @@ Feature: Tablet BOL Upload
     And the upload should complete successfully
     And the item should be removed from queue
 
-  @tablet @offline @queue-limit
+  @tablet @offline @queue-limit @wip
   Scenario: Queue shows warning when approaching limit
     Given I am using "galaxy-tab" device
     And I have 45 pending uploads in the offline queue
@@ -205,7 +206,7 @@ Feature: Tablet BOL Upload
   # Orientation Change Handling
   # ========================================
 
-  @galaxy-tab @orientation @landscape
+  @galaxy-tab @orientation @landscape @wip
   Scenario: Dashboard maintains layout after orientation change
     Given I am using "galaxy-tab" device
     And the device orientation is "landscape"
@@ -217,7 +218,7 @@ Feature: Tablet BOL Upload
     When I rotate device to "landscape"
     Then the dashboard should return to landscape layout
 
-  @ipad-mini @orientation @portrait
+  @ipad-mini @orientation @portrait @wip
   Scenario: Document scanner handles orientation change
     Given I am using "ipad-mini" device
     And the device orientation is "portrait"
@@ -228,7 +229,7 @@ Feature: Tablet BOL Upload
     When I rotate device to "portrait"
     Then the scanner should return to portrait mode
 
-  @tablet @orientation @form-data
+  @galaxy-tab @orientation @form-data
   Scenario: Form data preserved during orientation change
     Given I am using "galaxy-tab" device
     And I navigate to "vehicles" page
@@ -239,13 +240,14 @@ Feature: Tablet BOL Upload
     Then "licensePlate" field should contain "MD-ORIENT-001"
     And "model" field should contain "Freightliner Cascadia"
     When I rotate device to "landscape"
-    Then all form data should be preserved
+    Then "licensePlate" field should contain "MD-ORIENT-001"
+    And "model" field should contain "Freightliner Cascadia"
 
   # ========================================
   # Signature Capture (Owner-Operator)
   # ========================================
 
-  @ipad-mini @signature @pod
+  @ipad-mini @signature @pod @wip
   Scenario: Capture delivery signature on POD
     Given I am using "ipad-mini" device
     And I navigate to "loads" page
@@ -258,7 +260,7 @@ Feature: Tablet BOL Upload
     Then the signature should be attached to the POD
     And I should see "Signature captured" message
 
-  @ipad-mini @signature @clear
+  @ipad-mini @signature @clear @wip
   Scenario: Clear and redraw signature
     Given I am using "ipad-mini" device
     And I am on the signature capture screen
@@ -273,7 +275,7 @@ Feature: Tablet BOL Upload
   # Error Handling
   # ========================================
 
-  @tablet @error @upload-failure
+  @tablet @error @upload-failure @wip
   Scenario: Handle upload failure gracefully
     Given I am using "galaxy-tab" device
     And I navigate to "loads" page
@@ -282,7 +284,7 @@ Feature: Tablet BOL Upload
     And the upload modal should remain open
     And I should be able to retry with a smaller file
 
-  @tablet @error @camera-permission
+  @tablet @error @camera-permission @wip
   Scenario: Handle camera permission denied
     Given I am using "ipad-mini" device
     And camera permission is denied

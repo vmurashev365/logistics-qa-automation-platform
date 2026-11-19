@@ -430,8 +430,11 @@ When('I delete current vehicle', { timeout: 30000 }, async function (this: Custo
   await confirmDeleteBtn.waitFor({ state: 'visible', timeout: 5000 });
   await confirmDeleteBtn.click();
 
-  // Wait for navigation back to list
-  await this.page.waitForLoadState('domcontentloaded');
+  // Odoo returns from the form to the list in the current document after the unlink.
+  // Let that transition finish before the next step navigates or searches.
+  const action = this.page.locator('.o_action_manager');
+  await action.locator('.o_form_view').waitFor({ state: 'hidden', timeout: 10000 });
+  await action.locator('.o_kanban_view, .o_list_view').first().waitFor({ state: 'visible', timeout: 10000 });
   console.log('✅ Vehicle deleted via UI');
 });
 

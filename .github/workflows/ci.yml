@@ -58,7 +58,7 @@ jobs:
 
       - name: Run Cucumber core selection
         id: cucumber
-        run: npm run test:core
+        run: npm run test:core -- --format progress
 
       - name: Run native Chromium smoke checks
         id: chromium

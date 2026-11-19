@@ -11,8 +11,10 @@ In a local Odoo 17 Fleet demo, Playwright assigned **Maria Rusu** to vehicle **M
 Cucumber then checked the driver through Odoo JSON-RPC and independently checked the stored relationship in PostgreSQL.
 Both reads matched the expected assignment. The report shows the expected and observed values from the recorded run.
 
-[Watch the recording](https://odoo-fleet-driver-assignment.vmurashev.chatgpt.site/) ·
-[Open the check report](https://odoo-fleet-driver-assignment.vmurashev.chatgpt.site/report) ·
+[![Driver assignment report showing Maria Rusu as the expected and observed driver in Odoo JSON-RPC and PostgreSQL](docs/assets/driver-assignment-report.png)](https://vmurashev365.github.io/logistics-qa-automation-platform/report.html)
+
+[Watch the recording](https://vmurashev365.github.io/logistics-qa-automation-platform/) ·
+[Open the check report](https://vmurashev365.github.io/logistics-qa-automation-platform/report.html) ·
 [Read the Gherkin scenario](features/web/fleet/driver-assignment.feature)
 
 ## Quick start

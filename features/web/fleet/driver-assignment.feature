@@ -1,4 +1,4 @@
-@web @fleet @driver-assignment
+@web @fleet @driver-assignment @browser @odoo-api
 Feature: Driver Assignment
   As a Fleet Manager
   I want to assign drivers to vehicles

@@ -21,10 +21,11 @@ export function roundHalfUp(value: number, decimals: number = 2): number {
 
 /** Convert a decimal-dollar amount to integer cents using half-up rounding. */
 export function dollarsToCents(amountDollars: number): number {
-  const rounded = roundHalfUp(amountDollars, 2);
-  const cents = rounded * 100;
-  // cents should be an integer after rounding; guard against floating drift.
-  return Math.trunc(Math.round(cents));
+  if (!Number.isFinite(amountDollars)) {
+    throw new Error(`Invalid number for rounding: ${String(amountDollars)}`);
+  }
+  const { numerator, scale } = parseDecimalToBigInt(amountDollars);
+  return Number(divideHalfUp(numerator * 100n, pow10(scale)));
 }
 
 /** Alias for callers that treat the input as a decimal-dollar amount. */
@@ -32,39 +33,30 @@ export function toCents(amount: number): number {
   return dollarsToCents(amount);
 }
 
-function toPlainDecimalString(value: number): string {
-  const s = value.toString();
-  if (!/[eE]/.test(s)) return s;
-  // Avoid scientific notation so we can parse deterministically.
-  // 12 decimals is sufficient for gallons-style quantities used in tests.
-  const fixed = value.toFixed(12);
-  return fixed.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
-}
-
 function parseDecimalToBigInt(value: number): { numerator: bigint; scale: number } {
-  if (!Number.isFinite(value)) {
-    throw new Error(`Invalid decimal value: ${String(value)}`);
-  }
-
-  const raw = toPlainDecimalString(value).trim();
-  const match = raw.match(/^([+-])?(\d+)(?:\.(\d+))?$/);
+  // Parse the number's shortest decimal representation, including scientific notation.
+  const raw = value.toString();
+  const match = raw.match(/^(-?)(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/);
   if (!match) {
     throw new Error(`Unsupported decimal format: ${raw}`);
   }
 
-  const sign = match[1] === '-' ? -1n : 1n;
-  const intPart = match[2];
-  const fracPart = match[3] ?? '';
-  const scale = fracPart.length;
-  const digits = (intPart + fracPart).replace(/^0+(?=\d)/, '');
-  const numerator = digits.length === 0 ? 0n : BigInt(digits);
-  return { numerator: sign * numerator, scale };
+  const [, sign, whole, fraction = '', exponent = '0'] = match;
+  const numerator = BigInt(sign + whole + fraction);
+  const scale = fraction.length - Number(exponent);
+  return scale < 0 ? { numerator: numerator * pow10(-scale), scale: 0 } : { numerator, scale };
 }
 
 function pow10(n: number): bigint {
-  let v = 1n;
-  for (let i = 0; i < n; i += 1) v *= 10n;
-  return v;
+  return 10n ** BigInt(n);
+}
+
+function divideHalfUp(numerator: bigint, denominator: bigint): bigint {
+  const magnitude = numerator < 0n ? -numerator : numerator;
+  const quotient = magnitude / denominator;
+  const remainder = magnitude % denominator;
+  const rounded = remainder * 2n >= denominator ? quotient + 1n : quotient;
+  return numerator < 0n ? -rounded : rounded;
 }
 
 function assertSafeIntegerCents(cents: bigint): number {
@@ -90,16 +82,7 @@ export function mulToCents(quantity: number, unitPriceCents: number): number {
   }
 
   const { numerator, scale } = parseDecimalToBigInt(quantity);
-  const denom = pow10(scale);
-  const totalNumer = numerator * BigInt(unitPriceCents);
-
-  const sign = totalNumer < 0n ? -1n : 1n;
-  const absNumer = totalNumer < 0n ? -totalNumer : totalNumer;
-  const quotient = absNumer / denom;
-  const remainder = absNumer % denom;
-  const rounded = remainder * 2n >= denom ? quotient + 1n : quotient;
-
-  return assertSafeIntegerCents(sign * rounded);
+  return assertSafeIntegerCents(divideHalfUp(numerator * BigInt(unitPriceCents), pow10(scale)));
 }
 
 /** Round a "cents" float to an integer cent using half-up rounding. */

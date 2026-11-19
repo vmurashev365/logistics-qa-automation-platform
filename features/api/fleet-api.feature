@@ -1,4 +1,4 @@
-@api @fleet
+@api @fleet @odoo-api
 Feature: Fleet API Operations
   As a backend service
   I want to manage vehicles through Odoo's JSON-RPC API

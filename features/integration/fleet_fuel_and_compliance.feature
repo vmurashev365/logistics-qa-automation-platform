@@ -1,3 +1,4 @@
+@odoo-api
 Feature: Fleet Fuel and Compliance Management
 
   @integration @api @fleet @record_fuel

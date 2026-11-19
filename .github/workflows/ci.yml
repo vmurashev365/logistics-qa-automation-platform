@@ -46,6 +46,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - run: npm ci
+      - run: npm run test:unit
       - run: npm run type-check
       - run: npm run lint
       - run: npx playwright install --with-deps chromium
@@ -60,7 +61,7 @@ jobs:
         id: cucumber
         run: npm run test:core -- --format progress
 
-      - name: Run native Chromium smoke checks
+      - name: Run native Chromium tests
         id: chromium
         if: ${{ !cancelled() && steps.cucumber.outcome != 'skipped' && steps.cucumber.outcome != '' }}
         run: npm run test:chromium

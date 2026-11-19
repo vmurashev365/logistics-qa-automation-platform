@@ -4,15 +4,13 @@ Feature: Complete Vehicle Lifecycle
   I want to ensure data consistency across all layers
   So that users see accurate information everywhere
 
-  Background:
-    Given I am logged in as admin
-
   # ============================================
   # END-TO-END DATA SYNC TESTS (All via UI)
   # ============================================
 
-  @end-to-end @integration-001
+  @end-to-end @integration-001 @browser @odoo-api
   Scenario: Vehicle created in UI syncs to API and database
+    Given I am logged in as admin
     # UI Layer - Create vehicle through UI (like MD-AUDIT-001)
     And I navigate to "vehicles" page
     When I create a vehicle with plate "MD-INT-TEST-001"
@@ -28,8 +26,9 @@ Feature: Complete Vehicle Lifecycle
     # Database Layer - Verify vehicle persisted to database
     Then database should contain vehicle plate "MD-INT-TEST-001"
 
-  @end-to-end @integration-002
+  @end-to-end @integration-002 @browser @odoo-api
   Scenario: Vehicle update via UI propagates across all layers
+    Given I am logged in as admin
     # Create vehicle via UI first
     And I navigate to "vehicles" page
     When I create a vehicle with plate "MD-E2E-002"
@@ -47,8 +46,9 @@ Feature: Complete Vehicle Lifecycle
     When I send authenticated request to get vehicle "MD-E2E-002"
     Then API response should show odometer 15000
 
-  @end-to-end @integration-003
+  @end-to-end @integration-003 @browser @odoo-api
   Scenario: Vehicle deletion via UI removes from all layers
+    Given I am logged in as admin
     # Create vehicle via UI first
     And I navigate to "vehicles" page
     When I create a vehicle with plate "MD-E2E-003"
@@ -71,8 +71,9 @@ Feature: Complete Vehicle Lifecycle
   # ============================================
   # DRIVER ASSIGNMENT LIFECYCLE
   # ============================================
-  @driver-assignment @integration-004
+  @driver-assignment @integration-004 @browser @odoo-api
   Scenario: Driver assignment syncs across layers
+    Given I am logged in as admin
     # Create vehicle via UI first
     And I navigate to "vehicles" page
     When I create a vehicle with plate "MD-DRV-001"
@@ -90,8 +91,9 @@ Feature: Complete Vehicle Lifecycle
     # Verify in database
     Then database vehicle "MD-DRV-001" should have driver "Ion Popescu"
 
-  @driver-assignment @integration-005
+  @driver-assignment @integration-005 @browser @odoo-api
   Scenario: Driver reassignment updates all layers
+    Given I am logged in as admin
     # Create vehicle and assign first driver via UI
     And I navigate to "vehicles" page
     When I create a vehicle with plate "MD-DRV-002"
@@ -115,8 +117,9 @@ Feature: Complete Vehicle Lifecycle
   # ISTQB: True integration - UI creates data, CTI queries it
   # ============================================
 
-  @cti-integration @module_cti @integration-006
+  @cti-integration @module_cti @integration-006 @browser @odoo-api
   Scenario: Incoming call triggers screen pop with vehicle info
+    Given I am logged in as admin
     # PRECONDITION: Verify company phone is configured
     Given company phone is "+1800555000"
 
@@ -145,8 +148,9 @@ Feature: Complete Vehicle Lifecycle
     And last call should have caller "+1234567890"
     And CTI lookup should find driver "John Doe" for phone "+1234567890"
 
-  @cti-integration @module_cti @integration-007
+  @cti-integration @module_cti @integration-007 @browser @odoo-api
   Scenario: Call lifecycle events are logged correctly
+    Given I am logged in as admin
     # PRECONDITION: Verify company phone is configured
     Given company phone is "+1800555000"
 
@@ -240,7 +244,7 @@ Feature: Complete Vehicle Lifecycle
   # API AND DATABASE CONSISTENCY
   # ============================================
 
-  @api-db-consistency @integration-012
+  @api-db-consistency @integration-012 @odoo-api
   Scenario: API creation persists to database immediately
     # Create via API
     When I create vehicle via API with plate "MD-API-012"
@@ -248,7 +252,7 @@ Feature: Complete Vehicle Lifecycle
     # Verify immediate persistence
     Then database should contain vehicle plate "MD-API-012"
 
-  @api-db-consistency @integration-013
+  @api-db-consistency @integration-013 @odoo-api
   Scenario: Database state matches API response
     # Get vehicle via API (this scenario creates its own vehicle)
     Given vehicle "MD-API-013" exists in the system
@@ -262,8 +266,9 @@ Feature: Complete Vehicle Lifecycle
   # CROSS-SYSTEM WORKFLOW
   # ============================================
 
-  @full-workflow @integration-014
+  @full-workflow @integration-014 @browser @odoo-api
   Scenario: Complete vehicle workflow across all systems
+    Given I am logged in as admin
     # 1. Create via UI (using working atomic steps)
     And I navigate to "vehicles" page
     When I create a vehicle with plate "MD-FULL-001"

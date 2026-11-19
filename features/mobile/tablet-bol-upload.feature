@@ -1,4 +1,4 @@
-@tablet @critical @module_loads
+@tablet @critical @module_loads @browser
 # Scenarios tagged @wip still need step definitions; the Fleet form scenario is implemented.
 Feature: Tablet BOL Upload
   As a fleet driver or owner-operator

@@ -4,7 +4,7 @@
  */
 
 import { World, IWorldOptions, setWorldConstructor } from '@cucumber/cucumber';
-import { Browser, BrowserContext, Page } from 'playwright';
+import type { BrowserContext, Page } from 'playwright';
 import { VehiclesListPage } from '../pages/web/fleet/VehiclesListPage';
 import { VehicleFormPage } from '../pages/web/fleet/VehicleFormPage';
 import { LoginPage } from '../pages/web/LoginPage';
@@ -31,9 +31,18 @@ import { getEnvConfig } from './env';
  */
 export class CustomWorld extends World {
   // Playwright instances
-  browser!: Browser;
-  context!: BrowserContext;
-  page!: Page;
+  browserContext?: BrowserContext;
+  browserPage?: Page;
+
+  get context(): BrowserContext {
+    if (!this.browserContext) throw new Error('This step needs a browser context. Tag its scenario @browser.');
+    return this.browserContext;
+  }
+
+  get page(): Page {
+    if (!this.browserPage) throw new Error('This step needs a browser page. Tag its scenario @browser.');
+    return this.browserPage;
+  }
 
   // Page Objects - Fleet Module
   vehiclesListPage!: VehiclesListPage;
@@ -43,15 +52,49 @@ export class CustomWorld extends World {
   loginPage!: LoginPage;
 
   // API Clients
-  odooApi!: OdooJsonRpcClient;
-  restApi!: RestApiClient;
-  fleetEndpoints!: FleetEndpoints;
+  private odooClient?: OdooJsonRpcClient;
+  private fleetApi?: FleetEndpoints;
+  private restClient?: RestApiClient;
+
+  get odooApi(): OdooJsonRpcClient {
+    if (!this.odooClient) throw new Error('This step needs an authenticated Odoo client. Tag its scenario @odoo-api.');
+    return this.odooClient;
+  }
+
+  get fleetEndpoints(): FleetEndpoints {
+    return (this.fleetApi ??= new FleetEndpoints(this.odooApi));
+  }
+
+  get restApi(): RestApiClient {
+    return (this.restClient ??= new RestApiClient(getEnvConfig().apiBaseUrl));
+  }
+
+  async authenticateOdoo(): Promise<void> {
+    const config = getEnvConfig();
+    const client = new OdooJsonRpcClient(config.baseUrl);
+    await client.authenticate(config.odooDatabase, config.odooUsername, config.odooPassword);
+    this.odooClient = client;
+  }
 
   // What the last API step received: a real HTTP response or an Odoo JSON-RPC result
   lastApiResponse?: ApiResult;
 
   // Database Client (PostgreSQL)
-  dbClient?: PgClient;
+  private postgres?: PgClient;
+
+  get dbClient(): PgClient | undefined {
+    if (this.postgres) return this.postgres;
+    const config = getEnvConfig();
+    if (!config.dbEnabled) return undefined;
+    this.postgres = PgClient.getInstance({
+      host: config.postgresHost,
+      port: config.postgresPort,
+      user: config.postgresUser,
+      password: config.postgresPassword,
+      database: config.postgresDatabase,
+    });
+    return this.postgres;
+  }
 
   // Mock Services
   ctiClient?: AsteriskMockClient;
@@ -77,15 +120,12 @@ export class CustomWorld extends World {
    */
   get fleet(): FleetModels {
     if (!this._fleetModels) {
-      if (!this.odooApi) {
-        throw new Error('CustomWorld.fleet: odooApi is not initialized');
-      }
-
+      const api = this.odooApi;
       this._fleetModels = {
-        vehicle: new FleetVehicleModel(this.odooApi),
-        fuel: new FleetFuelLogModel(this.odooApi),
-        inspection: new FleetInspectionModel(this.odooApi),
-        service: new FleetServiceModel(this.odooApi),
+        vehicle: new FleetVehicleModel(api),
+        fuel: new FleetFuelLogModel(api),
+        inspection: new FleetInspectionModel(api),
+        service: new FleetServiceModel(api),
       };
     }
 

@@ -1,4 +1,4 @@
-@web @integration @module_cti @external-service
+@web @integration @module_cti @external-service @browser @odoo-api
 Feature: CTI Screen Pop
   As a dispatcher
   I want incoming calls to screen-pop driver details

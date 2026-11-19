@@ -1,4 +1,4 @@
-@visual
+@visual @browser
 Feature: Visual regression POC
   As a QA engineer
   I want a minimal visual regression check

@@ -1,4 +1,4 @@
-@smoke
+@smoke @browser
 Feature: Fleet Management Smoke Test
   As a Fleet Manager
   I want to manage vehicles

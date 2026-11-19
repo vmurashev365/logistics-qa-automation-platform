@@ -1,33 +1,30 @@
 /**
  * Cucumber Hooks
- * Lifecycle hooks for browser management and test setup/teardown
+ * Scenario resources and cleanup
  */
 
-import { Before, After, BeforeAll, AfterAll, BeforeStep, AfterStep, Status } from '@cucumber/cucumber';
+import { Before, After, AfterAll, BeforeStep, AfterStep, Status } from '@cucumber/cucumber';
 import { chromium, firefox, webkit, Browser } from 'playwright';
 import { CustomWorld } from './custom-world';
 import { getEnvConfig, envBoolean, envInteger } from './env';
-import { OdooJsonRpcClient } from '../api/clients/OdooJsonRpcClient';
-import { RestApiClient } from '../api/clients/RestApiClient';
-import { FleetEndpoints } from '../api/endpoints/FleetEndpoints';
 import { PgClient } from '../db/PgClient';
 import { AsteriskMockClient } from '../api/clients/AsteriskMockClient';
 import { CouchClient } from '../db/CouchClient';
+import { randomUUID } from 'node:crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Shared browser instance across all scenarios
-let browser: Browser;
+// Each worker shares a browser only after its first browser scenario.
+let browser: Browser | undefined;
 
 // Step timing diagnostics
 let stepStartTime: number;
 let currentStepText = '';
 let currentStepIndex = 0;
-let scenarioStartTime = 0;
 const DEBUG_TIMING = envBoolean('DEBUG_TIMING', true);
 const SLOW_STEP_THRESHOLD_MS = envInteger('SLOW_STEP_THRESHOLD_MS', 1500);
 
-/** The test vehicle plate convention: every plate a scenario creates starts with "MD-". */
+/** Fixed fixture plates eligible for stale-record cleanup. */
 const TEST_PLATE = /^MD-/;
 
 interface PickleLike {
@@ -65,104 +62,41 @@ function formatDuration(durationMs: number): string {
   return `${(durationMs / 1000).toFixed(2)}s`;
 }
 
-/**
- * BeforeAll Hook
- * Launches browser once before all scenarios
- */
-BeforeAll(async function () {
-  const config = getEnvConfig();
-  
-  console.log('\n🚀 Launching browser...');
-  console.log(`   Browser: ${config.browser}`);
-  console.log(`   Headless: ${config.headless}`);
-  console.log(`   Base URL: ${config.baseUrl}`);
-  
-  browser = await { chromium, firefox, webkit }[config.browser].launch({
-    headless: config.headless,
-    slowMo: config.slowMo,
-  });
-
-  // Ensure reports directory exists
-  const reportsDir = path.resolve(process.cwd(), 'reports/cucumber');
-  if (!fs.existsSync(reportsDir)) {
-    fs.mkdirSync(reportsDir, { recursive: true });
-  }
-
-  // Ensure screenshots directory exists
-  const screenshotsDir = path.resolve(process.cwd(), 'reports/screenshots');
-  if (!fs.existsSync(screenshotsDir)) {
-    fs.mkdirSync(screenshotsDir, { recursive: true });
-  }
-
-  console.log('✅ Browser launched successfully\n');
-});
-
-/**
- * Before Hook
- * Creates new context and page for each scenario
- */
-Before({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
-  const config = getEnvConfig();
-  
-  // Store scenario metadata
+Before(function (this: CustomWorld, scenario) {
   this.scenarioName = scenario.pickle.name;
   this.featureName = scenario.gherkinDocument?.feature?.name || 'Unknown Feature';
-  
-  // Assign shared browser to world
-  this.browser = browser;
+  this.setTestData('scenarioStartedAt', Date.now());
+  currentStepIndex = 0;
+  currentStepText = '';
+  console.log('Starting: ' + this.scenarioName);
+});
 
-  // Create new context for isolation
-  this.context = await browser.newContext({
-    viewport: {
-      width: config.viewportWidth,
-      height: config.viewportHeight,
-    },
+Before({ tags: '@browser', timeout: 60000 }, async function (this: CustomWorld) {
+  const config = getEnvConfig();
+  if (!browser?.isConnected()) {
+    browser = await { chromium, firefox, webkit }[config.browser].launch({
+      headless: config.headless,
+      slowMo: config.slowMo,
+    });
+  }
+  this.browserContext = await browser.newContext({
+    viewport: { width: config.viewportWidth, height: config.viewportHeight },
     ignoreHTTPSErrors: true,
-    // Record video if enabled
     ...(config.videoRecording && {
-      recordVideo: {
-        dir: 'reports/videos',
-        size: { width: 1280, height: 720 },
-      },
+      recordVideo: { dir: 'reports/videos', size: { width: 1280, height: 720 } },
     }),
   });
-
-  // Set default timeout
   this.context.setDefaultTimeout(config.timeout);
-
-  // Create new page
-  this.page = await this.context.newPage();
-
-  // Initialize page objects
+  this.browserPage = await this.context.newPage();
   this.initializePageObjects();
+});
 
-  // Initialize API Clients
-  this.odooApi = new OdooJsonRpcClient(config.baseUrl);
-  this.restApi = new RestApiClient(config.apiBaseUrl);
-  
-  this.fleetEndpoints = new FleetEndpoints(this.odooApi);
+Before({ tags: '@odoo-api', timeout: 60000 }, async function (this: CustomWorld, scenario) {
+  await this.authenticateOdoo();
 
-  // Vehicles this scenario names by plate. Leftovers with these exact plates (from an earlier run
-  // that was interrupted before its After hook) are removed, so the scenario starts from "this
-  // vehicle does not exist". Nothing else is touched: seeded data and the vehicles of scenarios
-  // running in parallel (which name other plates) are left alone.
-  const plates = platesNamedIn(scenario.pickle);
-
-  try {
-    await this.odooApi.authenticate(config.odooDatabase, config.odooUsername, config.odooPassword);
-    console.log('✅ API clients initialized');
-  } catch (error) {
-    const reason = error instanceof Error ? error : new Error(String(error));
-    // Scenarios that never call Odoo (e.g. the HOS calculator) still run; every Odoo call of
-    // this scenario fails with this reason instead of "not authenticated".
-    this.odooApi.rememberAuthenticationFailure(reason);
-    if (plates.length > 0) {
-      throw new Error(`Cannot remove leftover test vehicles: Odoo login failed: ${reason.message}`);
-    }
-    console.log(`⚠️ Odoo login failed, Odoo steps of this scenario will fail: ${reason.message}`);
-  }
-
-  for (const plate of plates) {
+  // Remove leftovers for the exact plates this scenario names before creating fixtures.
+  // Other invocations that use the same fixed plates must have their own database.
+  for (const plate of platesNamedIn(scenario.pickle)) {
     const leftovers = await this.fleetEndpoints.findVehiclesByPlateIncludingArchived(plate);
     for (const vehicle of leftovers) {
       if (vehicle.id !== undefined) {
@@ -170,56 +104,22 @@ Before({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
       }
     }
     if (leftovers.length > 0) {
-      console.log(`🧹 Removed ${leftovers.length} leftover vehicle(s) with plate ${plate}`);
+      console.log('Removed ' + leftovers.length + ' leftover vehicle(s) with plate ' + plate);
     }
   }
+});
 
-  // Initialize Database Client (if enabled)
-  if (config.dbEnabled) {
-    try {
-      this.dbClient = PgClient.getInstance({
-        host: config.postgresHost,
-        port: config.postgresPort,
-        user: config.postgresUser,
-        password: config.postgresPassword,
-        database: config.postgresDatabase,
-      });
-      console.log('✅ Database client initialized');
-    } catch (error) {
-      console.log(`⚠️ Database client initialization failed: ${error}`);
-    }
+Before({ tags: '@cti-integration' }, async function (this: CustomWorld) {
+  if (getEnvConfig().ctiMode === 'mock') {
+    this.ctiClient = new AsteriskMockClient();
+    await this.ctiClient.connect();
   }
+});
 
-  // Initialize CTI Mock Client (if enabled)
-  if (config.ctiMode === 'mock') {
-    try {
-      this.ctiClient = new AsteriskMockClient();
-      await this.ctiClient.connect();
-      console.log('✅ CTI mock client initialized');
-    } catch (error) {
-      console.log(`⚠️ CTI client initialization failed: ${error}`);
-    }
+Before({ tags: '@offline-sync' }, function (this: CustomWorld) {
+  if (getEnvConfig().offlineMode === 'mock') {
+    this.offlineClient = new CouchClient('test-offline-' + randomUUID());
   }
-
-  // Initialize Offline Sync Mock Client (if enabled)
-  if (config.offlineMode === 'mock') {
-    try {
-      const dbName = `test-offline-${Date.now()}`;
-      this.offlineClient = new CouchClient(dbName);
-      console.log('✅ Offline sync client initialized');
-    } catch (error) {
-      console.log(`⚠️ Offline client initialization failed: ${error}`);
-    }
-  }
-
-  // Clear test data from previous scenario
-  this.clearTestData();
-  scenarioStartTime = Date.now();
-  this.setTestData('scenarioStartedAt', scenarioStartTime);
-  currentStepIndex = 0;
-  currentStepText = '';
-
-  console.log(`\n📋 Starting: ${this.scenarioName}`);
 });
 
 /**
@@ -230,7 +130,7 @@ After({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
   const config = getEnvConfig();
 
   // Take screenshot on failure
-  if (scenario.result?.status === Status.FAILED && config.screenshotOnFailure) {
+  if (this.browserPage && scenario.result?.status === Status.FAILED && config.screenshotOnFailure) {
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const safeName = this.scenarioName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
@@ -239,15 +139,12 @@ After({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
         `reports/screenshots/${safeName}_${timestamp}.png`
       );
 
-      await this.page.screenshot({
-        path: screenshotPath,
-        fullPage: true,
-      });
+      fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
+      const screenshot = await this.browserPage.screenshot({ path: screenshotPath, fullPage: true });
 
       console.log(`📸 Screenshot saved: ${screenshotPath}`);
 
       // Attach screenshot to report (base64)
-      const screenshot = await this.page.screenshot({ type: 'png' });
       this.attach(screenshot, 'image/png');
     } catch (error) {
       console.error('Failed to capture screenshot:', error);
@@ -257,16 +154,11 @@ After({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
   // Log scenario result
   const status = scenario.result?.status;
   const statusEmoji = status === Status.PASSED ? '✅' : status === Status.FAILED ? '❌' : '⚠️';
-  const scenarioDuration = Date.now() - scenarioStartTime;
+  const scenarioDuration = Date.now() - (this.getTestData<number>('scenarioStartedAt') ?? Date.now());
   console.log(`${statusEmoji} Finished: ${this.scenarioName} - ${status} (${formatDuration(scenarioDuration)})`);
 
-  // Close page and context
-  if (this.page) {
-    await this.page.close().catch(() => {});
-  }
-  if (this.context) {
-    await this.context.close().catch(() => {});
-  }
+  // Closing the context also closes its pages and finishes any recording.
+  await this.browserContext?.close().catch(error => console.error('Browser context cleanup failed:', error));
 
   // Cleanup CTI mock client
   if (this.ctiClient) {
@@ -292,7 +184,7 @@ After({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
   // Cleanup test vehicles created during this scenario. First: the cleanups registered below
   // delete drivers, which the vehicles' driver history still references.
   const testVehicles = this.getTestData<string[]>('testVehicles') || [];
-  if (testVehicles.length > 0 && this.fleetEndpoints && this.odooApi) {
+  if (testVehicles.length > 0) {
     for (const plate of testVehicles) {
       try {
         // Archived ones too, with the history that blocks unlink
@@ -318,20 +210,11 @@ After({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
  * Closes browser after all scenarios complete
  */
 AfterAll(async function () {
-  console.log('\n🔒 Closing browser...');
-  
-  if (browser) {
-    await browser.close();
-  }
-
-  // Close database pool
   try {
+    await browser?.close();
+  } finally {
     await PgClient.closePool();
-  } catch {
-    // Pool may not have been initialized
   }
-
-  console.log('✅ Browser closed successfully');
   console.log('\n📊 Test run complete. Check reports/cucumber for results.\n');
 });
 

@@ -31,7 +31,8 @@
   },
   "include": [
     "src/**/*.ts",
-    "scripts/**/*.ts"
+    "scripts/**/*.ts",
+    "tests/**/*.ts"
   ],
   "exclude": [
     "node_modules",

@@ -1,4 +1,4 @@
-@integration @web-api-sync
+@integration @web-api-sync @browser @odoo-api
 Feature: Web UI and API Data Consistency
   As a system
   I want to ensure data consistency between Web UI and API

@@ -71,6 +71,7 @@ Feature: Security and Access Control
 
   @session @security-008 @browser
   Scenario: Direct URL access requires authentication
+    Given I am on the "login" page
     When I navigate to "vehicles" page
     Then I should be on "login" page
     And page URL should contain "login"

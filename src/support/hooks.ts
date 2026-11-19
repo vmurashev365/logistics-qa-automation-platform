@@ -127,10 +127,8 @@ Before({ tags: '@offline-sync' }, function (this: CustomWorld) {
  * Handles cleanup, screenshots on failure, and resource disposal
  */
 After({ timeout: 60000 }, async function (this: CustomWorld, scenario) {
-  const config = getEnvConfig();
-
   // Take screenshot on failure
-  if (this.browserPage && scenario.result?.status === Status.FAILED && config.screenshotOnFailure) {
+  if (this.browserPage && scenario.result?.status === Status.FAILED && envBoolean('SCREENSHOT_ON_FAILURE', true)) {
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const safeName = this.scenarioName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);

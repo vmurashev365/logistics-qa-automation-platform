@@ -1,4 +1,4 @@
-@tablet @offline @integration @module_offline_sync @external-service
+@tablet @offline @integration @module_offline_sync @external-service @browser
 Feature: Offline Sync
   As a driver on a tablet
   I want deliveries and POD uploads to queue offline

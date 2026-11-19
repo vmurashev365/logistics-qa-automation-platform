@@ -1,4 +1,4 @@
-@tablet @smoke @quick-check
+@tablet @smoke @quick-check @browser
 Feature: Tablet Device Quick Check
   Quick validation of tablet testing steps on existing pages
 

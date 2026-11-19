@@ -417,18 +417,14 @@ When('I delete current vehicle', { timeout: 30000 }, async function (this: Custo
   
   // Click Action menu (dropdown button in control panel)
   const actionBtn = this.page.locator('.o_cp_action_menus button, button.dropdown-toggle:has-text("Action")').first();
-  await actionBtn.waitFor({ state: 'visible', timeout: 5000 });
-  await actionBtn.click();
+  await actionBtn.click({ timeout: 5000 });
   
-  // Wait for menu and click Delete
   const deleteOption = this.page.getByRole('menuitem', { name: /delete/i });
-  await deleteOption.waitFor({ state: 'visible', timeout: 5000 });
-  await deleteOption.click();
+  await deleteOption.click({ timeout: 5000 });
 
   // Confirmation dialog "Bye-bye, record!": wait for its Delete button (no fixed pause)
   const confirmDeleteBtn = this.page.locator('.modal-footer button.btn-primary:has-text("Delete")');
-  await confirmDeleteBtn.waitFor({ state: 'visible', timeout: 5000 });
-  await confirmDeleteBtn.click();
+  await confirmDeleteBtn.click({ timeout: 5000 });
 
   // Odoo returns from the form to the list in the current document after the unlink.
   // Let that transition finish before the next step navigates or searches.

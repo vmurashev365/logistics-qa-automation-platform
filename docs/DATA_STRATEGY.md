@@ -6,8 +6,8 @@ or local `.env`. See the [environment template](../.env.example).
 
 ## Scenario lifecycle
 
-1. Before each scenario the hook looks for exact `MD-` plates in the compiled steps' quoted arguments and table
-   cells. It removes matching active and archived vehicles and related history from previous runs.
+1. Before each `@odoo-api` scenario the hook looks for exact `MD-` plates in the compiled steps' quoted arguments
+   and table cells. It removes matching active and archived vehicles and related history from previous runs.
 2. Steps can create vehicles through Fleet's JSON-RPC adapter or through the UI. Odoo requires `model_id`.
    The Fleet creation adapter supplies a model if omitted. In the UI, select a model before saving.
 3. At teardown the hook deletes tracked vehicles and runs registered cleanup callbacks, including callbacks for
@@ -17,6 +17,10 @@ or local `.env`. See the [environment template](../.env.example).
 Fuel and inspection scenarios can use `RUN_SUFFIX` or a suffix derived from `TEST_RUN_ID` to distinguish test
 vehicles. See the [hooks](../src/support/hooks.ts), [World](../src/support/custom-world.ts) and
 [identifier helper](../src/helpers/test-run.ts).
+
+The native discard scenario creates a vehicle and two partners with a unique suffix. Its fixture deletes the
+vehicle and its history before deleting the partner IDs returned at creation. See the
+[Playwright fixture](../tests/driver-assignment.spec.ts).
 
 ## Seed fixtures
 

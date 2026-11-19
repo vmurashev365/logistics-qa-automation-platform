@@ -8,6 +8,7 @@
   },
   "scripts": {
     "test": "npm run test:smoke",
+    "test:unit": "cd unit && node --require ts-node/register --test",
     "test:smoke": "cucumber-js --config cucumber.js --tags \"@smoke and not @api and not @module_loads and not @wip\"",
     "test:api": "cucumber-js --config cucumber.js --tags \"@api and not @module_finance and not @module_offline_sync and not @module_cti and not @module_loads and not @wip\"",
     "test:api:smoke": "cucumber-js --config cucumber.js --tags \"@api-smoke and not @wip\"",

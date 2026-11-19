@@ -11,8 +11,10 @@ In a local Odoo 17 Fleet demo, Playwright assigned **Maria Rusu** to vehicle **M
 Cucumber then checked the driver through Odoo JSON-RPC and independently checked the stored relationship in PostgreSQL.
 Both reads matched the expected assignment. The report shows the expected and observed values from the recorded run.
 
-[Watch the recording](https://odoo-fleet-driver-assignment.vmurashev.chatgpt.site/) ·
-[Open the check report](https://odoo-fleet-driver-assignment.vmurashev.chatgpt.site/report) ·
+[![Driver assignment report showing Maria Rusu as the expected and observed driver in Odoo JSON-RPC and PostgreSQL](docs/assets/driver-assignment-report.png)](https://vmurashev365.github.io/logistics-qa-automation-platform/report.html)
+
+[Watch the recording](https://vmurashev365.github.io/logistics-qa-automation-platform/) ·
+[Open the check report](https://vmurashev365.github.io/logistics-qa-automation-platform/report.html) ·
 [Read the Gherkin scenario](features/web/fleet/driver-assignment.feature)
 
 ## Quick start
@@ -46,11 +48,12 @@ glob in `cucumber.js` and can select scenarios in other files. The [runbook](doc
 | Command | Scenarios selected and prerequisites |
 | --- | --- |
 | `npm run test:smoke` | Fleet browser and tablet quick checks. Excludes `@api`, `@module_loads` and `@wip`. |
-| `npm run test:api` / `npm run test:api:smoke` | Core Odoo Fleet API checks / the tagged API smoke check. |
+| `npm run test:unit` | Money helper regression tests. Requires the installed npm dependencies. |
+| `npm run test:api` / `npm run test:api:smoke` | Fleet JSON-RPC checks / the tagged API smoke check. Both run without browser binaries. |
 | `npm run test:web` | Fleet UI and CTI screen pop. Use `npm run test:web -- --tags @fleet` for Fleet checks. |
 | `npm run test:integration` | Fleet, UI/API/DB consistency and simulated HOS/ELD rules. Excludes finance, offline-sync and CTI module tags. |
 | `npm run test:core` / `npm run test:nightly` | Union of smoke, API and integration selections. Overlapping scenarios run once. |
-| `npm run test:chromium` | Four native Playwright smoke checks for health, the login page and valid/invalid login. |
+| `npm run test:chromium` | Four native health and login checks plus the Fleet driver-change discard scenario. |
 | `npm run test:security` | Access control, sessions, input handling, export and audit. Some checks require PostgreSQL or access to the Odoo server log. Anonymization is tagged `@wip`. |
 | `npm run test:tablet` | Local Fleet form checks using tablet-sized viewports and orientation changes. |
 | `npm run test:tablet:galaxy` / `npm run test:tablet:ipad` | Device-tagged Fleet browser checks. |
@@ -74,8 +77,9 @@ Run `npm run report:cucumber` to generate `reports/cucumber/index.html` from JSO
 `npm run report:allure:trend:open` generates and opens the Allure report and saves local trend history.
 Failure screenshots go to `reports/screenshots/` when enabled.
 
-The [GitHub Actions workflow](.github/workflows/ci.yml) runs type-check, lint, the Cucumber core suites and the native
-Chromium smoke tests on pushes and pull requests targeting `main`, daily at 03:30 UTC and on manual dispatch.
+The [GitHub Actions workflow](.github/workflows/ci.yml) runs unit tests, type-check and lint before installing Chromium
+and starting the Odoo stack for the Cucumber core suite and native Playwright tests. It runs on pushes and pull
+requests targeting `main`, daily at 03:30 UTC and on manual dispatch.
 Download the Cucumber, Allure and Playwright HTML reports from **Artifacts** on the run page. GitHub requires a
 signed-in account for Actions artifact downloads. The driver-assignment recording and report above are public.
 
@@ -187,7 +191,8 @@ Start with the scenarios in [features](features) and use the [step library](docs
 
 Run `npm run test:integration -- --tags @hos` to exercise the simulated driving, duty, break and cycle rules.
 `VirtualClock` advances time, `EldMockClient` supplies duty events and `HosCalculator` evaluates the event history.
-Use `ELD_MODE=mock`. The API provider is a stub. See the [HOS scenarios](features/integration/hos_compliance.feature).
+With `ELD_MODE=mock`, these scenarios run without Chromium, Odoo or PostgreSQL. The API provider is a stub.
+See the [HOS scenarios](features/integration/hos_compliance.feature).
 
 ```gherkin
 Feature: HOS example

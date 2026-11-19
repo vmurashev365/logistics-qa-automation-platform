@@ -1,6 +1,6 @@
 # Framework architecture
 
-Cucumber runs Gherkin scenarios against Odoo 17 Community and PostgreSQL 15. The driver-assignment scenario saves the
+Cucumber expresses business workflows and rules in Gherkin. The driver-assignment scenario saves the
 assignment in the real Fleet UI, reads the vehicle through Odoo JSON-RPC and independently reads the driver relationship
 from PostgreSQL. The two read-back steps attach their expected and observed values to the same Cucumber result.
 
@@ -28,11 +28,23 @@ flowchart LR
 - [Page objects](../src/pages/) use [UI maps](../src/ui-map/) to navigate and save through the browser.
   [Fleet API adapters](../src/api/) prepare fixtures and read Odoo records. [Database queries](../src/db/queries.ts)
   use parameterized SQL.
-- [Hooks](../src/support/hooks.ts) create a fresh browser context and Cucumber World for each scenario and clean up
-  registered fixture data. [Parallel scheduling](../src/support/parallel.ts) gives `@serial` scenarios exclusive
-  execution within a run. Use a dedicated test database.
-- The [native Playwright specs](../tests/smoke.spec.ts) check HTTP health and browser login independently of Cucumber.
-  The [CI workflow](../.github/workflows/ci.yml) runs both runners and retains Cucumber, Allure and Playwright HTML.
+- [Hooks](../src/support/hooks.ts) create fresh browser contexts for `@browser` scenarios and authenticate a separate
+  JSON-RPC client for `@odoo-api` scenarios. Apply both tags when a workflow uses both paths. PostgreSQL and
+  REST clients initialize on first use. `@offline-sync` enables the in-memory PouchDB fixture where required,
+  including the full Fleet workflow. Browser login remains a Gherkin step. Cleanup covers resources acquired
+  before a setup failure.
+- Use native Playwright Test where browser assertions and test-scoped fixtures express the check directly.
+  The [discard-driver test](../tests/driver-assignment.spec.ts) uses a typed API fixture to seed, read back and clean
+  up its vehicle and drivers. The [health and login specs](../tests/smoke.spec.ts) run independently of that fixture.
+  The [CI workflow](../.github/workflows/ci.yml) runs both runners and retains their HTML reports.
+
+## Concurrency
+
+`@serial` gives a scenario exclusive access to the workers in **one Cucumber invocation**. Independent runs
+can still collide on fixed plates and partner names, change table-wide counts, and share server settings and
+login lockouts by source address. Use a dedicated demo stack per independent full run when these checks overlap.
+The native discard test uses unique vehicle and driver records and tears down by fixture IDs. It can run
+alongside another invocation of that same test on the demo stack.
 
 ## Simulated and deployment-specific paths
 

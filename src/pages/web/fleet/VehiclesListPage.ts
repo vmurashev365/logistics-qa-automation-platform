@@ -71,7 +71,7 @@ export class VehiclesListPage extends OdooBasePage {
       await this.waitForLoadingComplete();
       
       // Check URL contains fleet.vehicle
-      const url = this.getCurrentUrl();
+      const url = this.page.url();
       if (!url.includes('fleet.vehicle')) {
         return false;
       }
@@ -89,8 +89,7 @@ export class VehiclesListPage extends OdooBasePage {
   async clickCreateVehicle(): Promise<void> {
     // Click New button - in Odoo 17 it's labeled "New"
     const newBtn = this.page.getByRole('button', { name: /^new$/i }).first();
-    await newBtn.waitFor({ state: 'visible', timeout: 5000 });
-    await newBtn.click();
+    await newBtn.click({ timeout: 5000 });
     
     // Wait for form to appear
     await this.page.locator('.o_form_view').waitFor({ state: 'visible', timeout: 10000 });

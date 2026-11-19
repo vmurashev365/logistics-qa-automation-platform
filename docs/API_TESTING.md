@@ -1,8 +1,7 @@
 # API testing
 
-The Fleet suite uses Odoo JSON-RPC to create, read, update and delete records. The finance and load-status
-integrations use REST. Cucumber hooks launch the configured Playwright browser even for API scenarios,
-so install that browser as part of local setup.
+The Fleet API suite uses Odoo JSON-RPC to create, read, update and delete records without a browser.
+Mixed UI/API scenarios also use Playwright. The finance and load-status integrations use REST.
 
 | Task | Command |
 | --- | --- |
@@ -13,13 +12,14 @@ so install that browser as part of local setup.
 
 ## Odoo JSON-RPC
 
-`OdooJsonRpcClient.authenticate(db, login, password)` establishes a session. The hooks initialize the client
+`OdooJsonRpcClient.authenticate(db, login, password)` establishes a session. The `@odoo-api` hook initializes the client
 from `BASE_URL`, `ODOO_DATABASE`, `ODOO_USERNAME` and `ODOO_PASSWORD`. Its `searchRead` method accepts
 a model, domain, fields and optional pagination/context. `create` returns a record ID. `write` and `unlink`
 take arrays of IDs. Use `call(model, method, args, kwargs)` for another public model method. Odoo RPC errors
 are raised as `OdooApiError`. [Client](../src/api/clients/OdooJsonRpcClient.ts)
 
 ```gherkin
+@odoo-api
 Feature: Fleet API operations
   Background:
     Given Odoo API is authenticated
